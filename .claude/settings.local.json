@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($nodePath = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\owner\\\\Desktop\\\\trainer_app\"; & \"$nodePath\\\\node.exe\" --version; & \"$nodePath\\\\npm.cmd\" --version)",
+      "PowerShell($nodePath = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\owner\\\\Desktop\\\\trainer_app\"; & \"$nodePath\\\\npm.cmd\" install @notionhq/client @anthropic-ai/sdk next-pwa 2>&1)",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\owner\\\\Desktop\\\\trainer_app\\\\app\\\\api\\\\menu\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\owner\\\\Desktop\\\\trainer_app\\\\app\\\\api\\\\complete\")",
+      "PowerShell($nodePath = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\owner\\\\Desktop\\\\trainer_app\"; & \"$nodePath\\\\npm.cmd\" run build 2>&1)",
+      "PowerShell($nodePath = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\owner\\\\Desktop\\\\trainer_app\"; & \"$nodePath\\\\npm.cmd\" uninstall next-pwa 2>&1)",
+      "PowerShell(gh --version)"
+    ]
+  }
+}
