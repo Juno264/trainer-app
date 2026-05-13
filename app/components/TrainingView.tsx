@@ -21,6 +21,50 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
   const [submitting, setSubmitting] = useState(false);
   const [memo, setMemo] = useState("");
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    let startY = 0;
+    let isBouncing = false;
+    const onTouchStart = (e: TouchEvent) => {
+      // アニメーション途中でも現在位置から再開できるよう計算済みtransformを固定
+      const computed = getComputedStyle(el).transform;
+      el.style.transition = "";
+      if (computed !== "none") el.style.transform = computed;
+      startY = e.touches[0].clientY;
+      isBouncing = false;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (el.scrollHeight > el.clientHeight + 2) return;
+      const deltaY = e.touches[0].clientY - startY;
+      e.preventDefault();
+      isBouncing = true;
+      const damped = Math.sign(deltaY) * Math.pow(Math.abs(deltaY), 0.65) * 2.5;
+      el.style.transform = `translateY(${damped}px)`;
+    };
+    const onTouchEnd = () => {
+      if (!isBouncing) return;
+      isBouncing = false;
+      // 1フレーム待ってから遷移を開始することでガクつきを防ぐ
+      requestAnimationFrame(() => {
+        el.style.transition = "transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)";
+        el.style.transform = "translateY(0)";
+        setTimeout(() => { if (el) el.style.transition = ""; }, 700);
+      });
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
 
   useEffect(() => {
     if (timerRunning) {
@@ -66,7 +110,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
   const addSet = (exIdx: number) => {
     setExercises((prev) => prev.map((ex, i) => i !== exIdx ? ex : {
       ...ex,
-      sets: [...ex.sets, { 重量kg: ex.plan.目標重量kg, レップ数: ex.plan.目標レップ数 }],
+      sets: [...ex.sets, { 重量kg: "", レップ数: "" }],
     }));
   };
 
@@ -74,6 +118,14 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
     setExercises((prev) => prev.map((ex, i) => i !== exIdx ? ex : {
       ...ex,
       sets: ex.sets.filter((_, j) => j !== setIdx),
+    }));
+  };
+
+  const copyPrevSet = (exIdx: number, setIdx: number) => {
+    setExercises((prev) => prev.map((ex, i) => {
+      if (i !== exIdx) return ex;
+      const src = ex.sets[setIdx - 1];
+      return { ...ex, sets: ex.sets.map((s, j) => j !== setIdx ? s : { 重量kg: src.重量kg, レップ数: src.レップ数 }) };
     }));
   };
 
@@ -131,9 +183,9 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-black text-white pb-48">
+    <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
       {/* ヘッダー */}
-      <div className="sticky top-0 z-10 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
+      <div className="flex-shrink-0 relative z-10 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
         <div className="text-xs text-zinc-500 mt-2">トレーニング中</div>
         <div className="text-lg font-bold">{bodyPart}</div>
         {/* 体調選択 */}
@@ -149,13 +201,18 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
       </div>
 
       {/* 種目カード */}
-      <div className="flex-1 px-4 py-3 space-y-3">
+      <div ref={contentRef} className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 py-3 space-y-3">
         {exercises.map((ex, exIdx) => {
+          const isCardio = ex.plan.部位 === "有酸素（プール）";
           const allSetsHaveData = ex.sets.every(
             (s) => s.重量kg !== "" && s.レップ数 !== ""
           );
           const achievedSets = ex.sets.filter((s) => isAchieved(s, ex.plan)).length;
           const totalSets = ex.sets.length;
+
+          const headerSub = isCardio
+            ? `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "m × " : ""}${ex.plan.目標レップ数}本 × ${ex.sets.length}set`
+            : `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "kg × " : "自重 × "}${ex.plan.目標レップ数}rep × ${ex.sets.length}set`;
 
           return (
             <div key={ex.plan.id} className="bg-zinc-900 rounded-xl overflow-hidden">
@@ -167,8 +224,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                 <div>
                   <div className="font-semibold">{ex.plan.種目名}</div>
                   <div className="text-xs text-zinc-400 mt-0.5">
-                    {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
-                    {ex.plan.目標レップ数}rep × {ex.sets.length}set
+                    {headerSub}
                     {allSetsHaveData && (
                       <span className={`ml-2 ${achievedSets === totalSets ? "text-green-400" : achievedSets > 0 ? "text-yellow-400" : "text-red-400"}`}>
                         ({achievedSets}/{totalSets}達成)
@@ -184,35 +240,47 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                   {/* セットリスト */}
                   <div className="space-y-2">
                     {/* ヘッダー行 */}
-                    <div className="grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 text-xs text-zinc-500 px-1">
+                    <div className="grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 text-xs text-zinc-500 px-1">
                       <div>Set</div>
-                      <div>重量(kg)</div>
-                      <div>回数</div>
+                      <div>{isCardio ? "距離(m)" : "重量(kg)"}</div>
+                      <div>{isCardio ? "本数" : "回数"}</div>
+                      <div></div>
                       <div></div>
                     </div>
                     {/* 目標行 */}
-                    <div className="grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 items-center text-xs text-zinc-500 bg-zinc-800/50 rounded-lg px-2 py-1.5">
+                    <div className="grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 items-center text-xs text-zinc-500 bg-zinc-800/50 rounded-lg px-2 py-1.5">
                       <div>目標</div>
-                      <div>{ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg : "自重"}</div>
-                      <div>{ex.plan.目標レップ数}</div>
+                      <div>{isCardio ? (ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}m` : "-") : (ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg : "自重")}</div>
+                      <div>{ex.plan.目標レップ数}{isCardio ? "本" : ""}</div>
+                      <div></div>
                       <div></div>
                     </div>
+                    {/* 前回実績行 */}
+                    {ex.plan.前回重量kg !== null && (
+                      <div className="grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 items-center text-xs text-blue-400/70 px-2 py-1">
+                        <div>前回</div>
+                        <div>{isCardio ? (ex.plan.前回重量kg > 0 ? `${ex.plan.前回重量kg}m` : "-") : (ex.plan.前回重量kg > 0 ? ex.plan.前回重量kg : "自重")}</div>
+                        <div>{ex.plan.前回レップ数 ?? "-"}{isCardio && ex.plan.前回レップ数 ? "本" : ""}</div>
+                        <div></div>
+                        <div></div>
+                      </div>
+                    )}
                     {ex.sets.map((set, setIdx) => {
                       const achieved = isAchieved(set, ex.plan);
                       const hasData = set.重量kg !== "" && set.レップ数 !== "";
                       return (
                         <div
                           key={setIdx}
-                          className={`grid grid-cols-[2rem_1fr_1fr_2rem] gap-2 items-center rounded-lg px-2 py-1.5 ${hasData ? (achieved ? "bg-green-950/60 border border-green-800" : "bg-red-950/60 border border-red-800") : "bg-zinc-800/30"}`}
+                          className={`grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 items-center rounded-lg px-2 py-1.5 ${hasData ? (achieved ? "bg-green-950/60 border border-green-800" : "bg-red-950/60 border border-red-800") : "bg-zinc-800/30"}`}
                         >
                           <div className="text-sm font-medium">{setIdx + 1}</div>
                           <input
                             type="number"
-                            inputMode="decimal"
+                            inputMode="numeric"
                             value={set.重量kg}
                             onChange={(e) => updateSet(exIdx, setIdx, "重量kg", e.target.value)}
                             onFocus={() => { if (!timerRunning && setIdx > 0) { setTimerLeft(timerPreset); setTimerRunning(true); } }}
-                            placeholder={String(ex.plan.目標重量kg)}
+                            placeholder={ex.plan.目標重量kg > 0 ? String(ex.plan.目標重量kg) : (isCardio ? "0" : "0")}
                             className="bg-zinc-700 rounded-md px-2 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
                           <input
@@ -223,6 +291,13 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                             placeholder={String(ex.plan.目標レップ数)}
                             className="bg-zinc-700 rounded-md px-2 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
+                          {setIdx > 0 ? (
+                            <button
+                              onClick={() => copyPrevSet(exIdx, setIdx)}
+                              className="text-zinc-400 text-base leading-none flex items-center justify-center"
+                              title="前セットと同じ"
+                            >↑</button>
+                          ) : <div />}
                           <button
                             onClick={() => removeSet(exIdx, setIdx)}
                             className="text-zinc-500 text-lg leading-none"
@@ -270,8 +345,8 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
         })}
       </div>
 
-      {/* 固定フッター（タイマー＋完了ボタン） */}
-      <div className="fixed bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-800 px-4 pt-3 pb-safe-bottom">
+      {/* フッター（タイマー＋完了ボタン） */}
+      <div className="flex-shrink-0 relative z-10 bg-zinc-950 border-t border-zinc-800 px-4 pt-3 pb-safe-bottom">
         {/* タイマー */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex gap-2">

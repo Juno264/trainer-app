@@ -3,15 +3,16 @@ import { useState, useEffect } from "react";
 import type { ExercisePlan, ExerciseState, RecommendData, Condition, ReviewResult } from "./lib/types";
 import TrainingView from "./components/TrainingView";
 import CustomEditView from "./components/CustomEditView";
+import HistoryView from "./components/HistoryView";
 
-type Screen = "loading" | "recommend" | "custom" | "training" | "review";
+type Screen = "loading" | "recommend" | "custom" | "training" | "review" | "history";
 
 function makeState(plan: ExercisePlan): ExerciseState {
   return {
     plan,
     sets: Array.from({ length: plan.セット数 }, () => ({
-      重量kg: plan.目標重量kg,
-      レップ数: plan.目標レップ数,
+      重量kg: "",
+      レップ数: "",
     })),
     rpe: 7,
     memo: "",
@@ -107,11 +108,14 @@ export default function Home() {
     );
   }
 
+  if (screen === "history") {
+    return <HistoryView onBack={() => setScreen("recommend")} />;
+  }
+
   if (screen === "custom" && recommendation) {
     return (
       <CustomEditView
-        bodyPart={recommendation.部位}
-        allExercises={recommendation.種目リスト}
+        recommendedBodyPart={recommendation.部位}
         selectedExercises={exercises}
         onStart={handleCustomStart}
         onBack={() => setScreen("recommend")}
@@ -121,13 +125,13 @@ export default function Home() {
 
   if (screen === "review" && review) {
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col">
+      <div className="h-screen overflow-hidden bg-black text-white flex flex-col">
         <div className="px-4 pt-safe-top pb-4 border-b border-zinc-800">
           <div className="mt-4 text-xs text-zinc-500">トレーニング完了</div>
           <div className="text-xl font-bold mt-1">{recommendation?.部位}</div>
         </div>
 
-        <div className="flex-1 px-4 py-4 space-y-4 overflow-y-auto">
+        <div className="flex-1 min-h-0 px-4 py-4 space-y-4 overflow-y-auto">
           <div className="bg-zinc-900 rounded-xl p-4">
             <div className="text-xs text-zinc-500 mb-2">総合評価</div>
             <div className={`text-3xl font-bold flex items-center gap-2 ${RATING_COLOR[review.総合評価]}`}>
@@ -175,9 +179,13 @@ export default function Home() {
 
   // recommend screen
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      <div className="px-4 pt-safe-top pb-2">
+    <div className="h-screen overflow-hidden bg-black text-white flex flex-col">
+      <div className="px-4 pt-safe-top pb-2 flex-shrink-0 flex items-end justify-between">
         <div className="mt-4 text-xs text-zinc-500">今日のメニュー</div>
+        <button
+          onClick={() => setScreen("history")}
+          className="text-xs text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-700"
+        >履歴</button>
       </div>
 
       {error ? (
@@ -186,7 +194,7 @@ export default function Home() {
           <button onClick={fetchRecommend} className="px-6 py-3 bg-zinc-800 rounded-xl text-sm">再試行</button>
         </div>
       ) : recommendation && (
-        <div className="flex-1 px-4 space-y-3 overflow-y-auto pb-36">
+        <div className="flex-1 min-h-0 px-4 space-y-3 overflow-y-auto scrollbar-hide pb-36">
           <div className="bg-zinc-900 rounded-2xl p-5">
             <div className="flex items-center gap-3">
               <div className="text-4xl">{BODY_PART_EMOJI[recommendation.部位] ?? "💪"}</div>

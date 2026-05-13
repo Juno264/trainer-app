@@ -55,11 +55,7 @@ export async function POST(request: NextRequest) {
   for (const record of records) {
     for (let i = 0; i < record.sets.length; i++) {
       const set = record.sets[i];
-      const achieved = set.達成
-        ? "達成"
-        : set.重量kg >= set.目標重量kg && set.レップ数 >= set.目標レップ数
-        ? "部分達成"
-        : "未達";
+      const achieved = set.達成 ? "達成" : "未達";
       try {
         await notion.pages.create({
           parent: { database_id: process.env.NOTION_RECORD_DB! },
@@ -84,11 +80,52 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2. Claude APIでレビュー生成
+  // 2. 過去の記録を取得してClaudeに渡す
+  let historySummary = "";
+  try {
+    const histRes = await notion.dataSources.query({
+      data_source_id: process.env.NOTION_RECORD_DS!,
+    });
+
+    // 種目ごとの最高重量×最高レップ数を取得（今日より前の記録のみ）
+    const prevBests: Record<string, { 重量kg: number; レップ数: number }> = {};
+    for (const page of histRes.results) {
+      if (page.object !== "page" || !("properties" in page)) continue;
+      const props = (page as PageObjectResponse).properties as Record<string, {
+        title?: Array<{ plain_text: string }>;
+        number?: number | null;
+        date?: { start: string } | null;
+      }>;
+      const name = props["種目名"]?.title?.[0]?.plain_text ?? "";
+      const date = props["実施日"]?.date?.start ?? "";
+      const weight = props["重量kg"]?.number ?? 0;
+      const reps = props["レップ数"]?.number ?? 0;
+      if (!name || date >= today) continue;
+      if (!prevBests[name] || weight > prevBests[name].重量kg) {
+        prevBests[name] = { 重量kg: weight, レップ数: reps };
+      }
+    }
+
+    const histLines = records
+      .map((r) => {
+        const prev = prevBests[r.種目名];
+        if (prev) {
+          return `${r.種目名}: 前回最高 ${prev.重量kg > 0 ? prev.重量kg + "kg" : "自重"}×${prev.レップ数}rep`;
+        }
+        return `${r.種目名}: 初回`;
+      })
+      .join("\n");
+
+    historySummary = `\n\n前回までの記録:\n${histLines}`;
+  } catch (e) {
+    console.error("Failed to fetch history:", e);
+  }
+
+  // 3. Claude APIでレビュー生成
   const summary = records.map((r) => {
     const achievedCount = r.sets.filter((s) => s.達成).length;
     const setDetails = r.sets
-      .map((s, i) => `  Set${i + 1}: ${s.重量kg}kg×${s.レップ数}rep (目標:${s.目標重量kg}kg×${s.目標レップ数}rep, ${s.達成 ? "達成" : "未達"})`)
+      .map((s, i) => `  Set${i + 1}: ${s.重量kg > 0 ? s.重量kg + "kg" : "自重"}×${s.レップ数}rep (目標:${s.目標重量kg > 0 ? s.目標重量kg + "kg" : "自重"}×${s.目標レップ数}rep, ${s.達成 ? "達成" : "未達"})`)
       .join("\n");
     return `【${r.種目名}】\n${setDetails}\n達成: ${achievedCount}/${r.sets.length}セット, RPE: ${r.RPE}`;
   }).join("\n\n");
@@ -97,7 +134,8 @@ export async function POST(request: NextRequest) {
 部位: ${部位}
 体調: ${体調}
 
-${summary}
+今回の記録:
+${summary}${historySummary}
 
 以下のJSON形式のみで回答してください:
 {
@@ -128,13 +166,14 @@ ${summary}
   try {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: `あなたはパーソナルトレーナーです。トレーニング記録を分析し、日本語でレビューと次回の目標重量を提案してください。
-ルール：
-- RPE7以下かつ全セット達成 → 次回+2.5kg
+ルール:
+- 前回比は「前回までの記録」と今回の実績重量を比較して判定してください（初回は「維持」）
+- RPE7以下かつ全セット達成 → 次回+2.5kg（自重種目はレップ数+2）
 - RPE8〜9かつ全セット達成 → 次回同重量維持
-- 未達またはRPE10 → 次回-2.5kg
-- 自重種目（目標重量0kg）はレップ数で評価してください
+- 未達またはRPE10 → 次回-2.5kg（自重種目はレップ数-2）
+- 自重種目（目標重量0kg）の目標重量kgは0のままにしてください
 レスポンスはJSON形式のみで返してください。`,
       messages: [{ role: "user", content: userPrompt }],
     });
@@ -145,7 +184,7 @@ ${summary}
     console.error("Claude error:", e);
   }
 
-  // 3. ClaudeレビューDBに書き込む
+  // 4. ClaudeレビューDBに書き込む
   try {
     await notion.pages.create({
       parent: { database_id: process.env.NOTION_REVIEW_DB! },
@@ -173,7 +212,7 @@ ${summary}
     console.error("Failed to write review:", e);
   }
 
-  // 4. 種目マスタの目標値を更新
+  // 5. 種目マスタの目標値を更新
   for (const target of claudeResult.種目別次回目標) {
     const exercise = records.find((r) => r.種目名 === target.種目名);
     if (!exercise?.id) continue;
@@ -192,7 +231,7 @@ ${summary}
     }
   }
 
-  // 5. 部位マスタの最終実施日を更新
+  // 6. 部位マスタの最終実施日を更新
   try {
     const buiRes = await notion.dataSources.query({
       data_source_id: process.env.NOTION_BUIMASTER_DS!,
