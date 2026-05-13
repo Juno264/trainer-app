@@ -2,6 +2,16 @@ export type BodyPart = "胸・三頭" | "背中・二頭" | "脚・お尻" | "�
 export type Condition = "良好" | "普通" | "疲れ気味";
 export type Rating = "好調" | "普通" | "要注意";
 export type WeightChange = "重量UP" | "維持" | "重量DOWN";
+export type PartStatus = "未実施" | "疲労中" | "回復済み" | "久しぶり";
+
+export type BodyPartInfo = {
+  名前: string;
+  経過日数: number;
+  回復目安日数: number;
+  回復進捗: number;
+  状態: PartStatus;
+  おすすめ: boolean;
+};
 
 export type ExercisePlan = {
   id: string;
@@ -15,10 +25,7 @@ export type ExercisePlan = {
 };
 
 export type RecommendData = {
-  部位: string;
-  理由: string;
-  経過日数: number;
-  種目リスト: ExercisePlan[];
+  部位リスト: BodyPartInfo[];
 };
 
 export type SetInput = {
