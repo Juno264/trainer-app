@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ExercisePlan, ExerciseState } from "../lib/types";
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
 
 const BODY_PARTS = ["胸・肩・三頭", "背中・二頭", "脚・お尻", "有酸素（プール）"];
 const MAX_PARTS = 3;
+const ITEM_H = 68; // px: approximate height of each selected-item row including gap
 
 function makeExerciseState(plan: ExercisePlan): ExerciseState {
   return {
@@ -27,6 +28,69 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
   const [loading, setLoading] = useState(true);
   const [selectedParts, setSelectedParts] = useState<string[]>([recommendedBodyPart]);
   const [selected, setSelected] = useState<ExerciseState[]>(selectedExercises);
+
+  // ── ドラッグ並び替え ─────────────────────────────────────────────────────
+  const selectedRef = useRef<ExerciseState[]>(selected);
+  selectedRef.current = selected;
+
+  const dragRef = useRef<{
+    active: boolean;
+    currentIdx: number;
+    adjustedStartY: number;
+  } | null>(null);
+
+  const [dragDisplay, setDragDisplay] = useState<{ idx: number; offsetY: number } | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const startDrag = (idx: number, fingerY: number) => {
+    dragRef.current = { active: true, currentIdx: idx, adjustedStartY: fingerY };
+    setDragDisplay({ idx, offsetY: 0 });
+  };
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const onTouchMove = (e: TouchEvent) => {
+      const dr = dragRef.current;
+      if (!dr?.active) return;
+      e.preventDefault();
+
+      const fingerY = e.touches[0].clientY;
+      const delta = fingerY - dr.adjustedStartY;
+      const steps = Math.round(delta / ITEM_H);
+      const len = selectedRef.current.length;
+      const targetIdx = Math.max(0, Math.min(len - 1, dr.currentIdx + steps));
+
+      if (targetIdx !== dr.currentIdx) {
+        const next = [...selectedRef.current];
+        const [item] = next.splice(dr.currentIdx, 1);
+        next.splice(targetIdx, 0, item);
+        setSelected(next);
+        dr.adjustedStartY += (targetIdx - dr.currentIdx) * ITEM_H;
+        dr.currentIdx = targetIdx;
+        setDragDisplay({ idx: targetIdx, offsetY: fingerY - dr.adjustedStartY });
+      } else {
+        setDragDisplay({ idx: dr.currentIdx, offsetY: delta });
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      setDragDisplay(null);
+    };
+
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd);
+    el.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     fetch("/api/exercises")
@@ -57,28 +121,10 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
     }
   };
 
-  const moveUp = (idx: number) => {
-    if (idx === 0) return;
-    setSelected((prev) => {
-      const next = [...prev];
-      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-      return next;
-    });
-  };
-
-  const moveDown = (idx: number) => {
-    if (idx === selected.length - 1) return;
-    setSelected((prev) => {
-      const next = [...prev];
-      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-      return next;
-    });
-  };
-
   return (
-    <div className="flex flex-col min-h-screen bg-black text-white pb-32">
+    <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
       {/* ヘッダー */}
-      <div className="sticky top-0 z-10 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
+      <div className="flex-shrink-0 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
         <div className="flex items-center gap-3 mt-2">
           <button onClick={onBack} className="text-zinc-400 text-lg">←</button>
           <div>
@@ -113,7 +159,8 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
         )}
       </div>
 
-      <div className="flex-1 px-4 py-3 space-y-4">
+      {/* スクロール可能なコンテンツ */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-4 py-3 pb-8 space-y-4">
         {loading && (
           <div className="flex items-center justify-center h-32">
             <div className="text-zinc-500 text-sm animate-pulse">読み込み中...</div>
@@ -126,26 +173,49 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
             {selected.length > 0 && (
               <div>
                 <div className="text-xs text-zinc-500 mb-2">選択中（{selected.length}種目）</div>
-                <div className="space-y-2">
-                  {selected.map((ex, idx) => (
-                    <div key={ex.plan.id} className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 py-3">
-                      <div className="flex flex-col gap-1">
-                        <button onClick={() => moveUp(idx)} className="text-zinc-500 text-xs leading-none h-5">▲</button>
-                        <button onClick={() => moveDown(idx)} className="text-zinc-500 text-xs leading-none h-5">▼</button>
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{ex.plan.種目名}</div>
-                        <div className="text-xs text-zinc-500">
-                          {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
-                          {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
+                <div ref={listRef} className="space-y-2">
+                  {selected.map((ex, idx) => {
+                    const isDragging = dragDisplay?.idx === idx;
+                    return (
+                      <div
+                        key={ex.plan.id}
+                        className={`flex items-center gap-2 rounded-xl px-3 py-3 transition-colors ${
+                          isDragging
+                            ? "bg-blue-900/40 border border-blue-700/50 shadow-lg shadow-black/40"
+                            : "bg-zinc-900"
+                        }`}
+                        style={
+                          isDragging
+                            ? { transform: `translateY(${dragDisplay.offsetY}px)`, position: "relative", zIndex: 10 }
+                            : {}
+                        }
+                      >
+                        {/* ドラッグハンドル */}
+                        <div
+                          className="flex items-center justify-center w-8 h-10 touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            startDrag(idx, e.touches[0].clientY);
+                          }}
+                        >
+                          <span className="text-zinc-500 text-lg select-none leading-none">⠿</span>
                         </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{ex.plan.種目名}</div>
+                          <div className="text-xs text-zinc-500">
+                            {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
+                            {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => toggle(ex.plan)}
+                          className="w-8 h-8 rounded-full bg-red-900/50 text-red-400 flex items-center justify-center text-lg flex-shrink-0"
+                        >×</button>
                       </div>
-                      <button
-                        onClick={() => toggle(ex.plan)}
-                        className="w-8 h-8 rounded-full bg-red-900/50 text-red-400 flex items-center justify-center text-lg"
-                      >×</button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -166,7 +236,7 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                         <button
                           key={plan.id}
                           onClick={() => toggle(plan)}
-                          className="w-full flex items-center gap-3 bg-zinc-900/50 rounded-xl px-3 py-3 text-left"
+                          className="w-full flex items-center gap-3 bg-zinc-900/50 rounded-xl px-3 py-3 text-left active:bg-zinc-800"
                         >
                           <div className="w-8 h-8 rounded-full bg-blue-900/50 text-blue-400 flex items-center justify-center text-lg flex-shrink-0">＋</div>
                           <div>
@@ -187,7 +257,8 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-800 px-4 pt-3 pb-safe-bottom">
+      {/* フッター */}
+      <div className="flex-shrink-0 bg-zinc-950 border-t border-zinc-800 px-4 pt-3 pb-safe-bottom">
         <button
           onClick={() => onStart(selected)}
           disabled={selected.length === 0}

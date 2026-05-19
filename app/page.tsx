@@ -242,7 +242,7 @@ export default function Home() {
           <button onClick={fetchData} className="px-6 py-3 bg-zinc-800 rounded-xl text-sm">再試行</button>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pb-36">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
 
           {/* 久しぶりバナー */}
           {jisaburiCount >= 2 && (
@@ -343,7 +343,7 @@ export default function Home() {
 
       {/* フッター */}
       {!error && selectedBodyPart && (
-        <div className="fixed bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-800 px-4 pt-3 pb-safe-bottom space-y-2">
+        <div className="flex-shrink-0 bg-zinc-950 border-t border-zinc-800 px-4 pt-3 pb-safe-bottom space-y-2">
           <button onClick={handleStart} className="w-full py-4 rounded-xl text-base font-bold bg-blue-600 active:bg-blue-700">
             開始する
           </button>
