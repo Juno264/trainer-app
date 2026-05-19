@@ -19,7 +19,6 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
   const [timerLeft, setTimerLeft] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [memo, setMemo] = useState("");
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
