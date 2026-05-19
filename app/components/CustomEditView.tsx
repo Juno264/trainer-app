@@ -160,7 +160,10 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
       </div>
 
       {/* スクロール可能なコンテンツ */}
-      <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 py-3 pb-8 space-y-4">
+      <div
+        className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 py-3 pb-8 space-y-4"
+        style={dragDisplay ? { touchAction: "none" } : undefined}
+      >
         {loading && (
           <div className="flex items-center justify-center h-32">
             <div className="text-zinc-500 text-sm animate-pulse">読み込み中...</div>
