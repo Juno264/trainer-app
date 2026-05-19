@@ -34,17 +34,29 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
   selectedRef.current = selected;
 
   const dragRef = useRef<{
-    active: boolean;
     currentIdx: number;
     adjustedStartY: number;
   } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchInitRef = useRef<{ x: number; y: number; idx: number } | null>(null);
 
-  const [dragDisplay, setDragDisplay] = useState<{ idx: number; offsetY: number } | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const startDrag = (idx: number, fingerY: number) => {
-    dragRef.current = { active: true, currentIdx: idx, adjustedStartY: fingerY };
-    setDragDisplay({ idx, offsetY: 0 });
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const endDrag = () => {
+    cancelLongPress();
+    dragRef.current = null;
+    touchInitRef.current = null;
+    setDragIdx(null);
+    setDragOffsetY(0);
   };
 
   useEffect(() => {
@@ -52,11 +64,21 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
     if (!el) return;
 
     const onTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+
+      // 長押し待機中：移動が大きければキャンセル
+      if (longPressTimerRef.current && touchInitRef.current) {
+        const dx = Math.abs(touch.clientX - touchInitRef.current.x);
+        const dy = Math.abs(touch.clientY - touchInitRef.current.y);
+        if (dx > 8 || dy > 8) cancelLongPress();
+        return;
+      }
+
       const dr = dragRef.current;
-      if (!dr?.active) return;
+      if (!dr) return;
       e.preventDefault();
 
-      const fingerY = e.touches[0].clientY;
+      const fingerY = touch.clientY;
       const delta = fingerY - dr.adjustedStartY;
       const steps = Math.round(delta / ITEM_H);
       const len = selectedRef.current.length;
@@ -69,17 +91,14 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
         setSelected(next);
         dr.adjustedStartY += (targetIdx - dr.currentIdx) * ITEM_H;
         dr.currentIdx = targetIdx;
-        setDragDisplay({ idx: targetIdx, offsetY: fingerY - dr.adjustedStartY });
+        setDragIdx(targetIdx);
+        setDragOffsetY(fingerY - dr.adjustedStartY);
       } else {
-        setDragDisplay({ idx: dr.currentIdx, offsetY: delta });
+        setDragOffsetY(delta);
       }
     };
 
-    const onTouchEnd = () => {
-      if (!dragRef.current) return;
-      dragRef.current = null;
-      setDragDisplay(null);
-    };
+    const onTouchEnd = () => endDrag();
 
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", onTouchEnd);
@@ -162,7 +181,7 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
       {/* スクロール可能なコンテンツ */}
       <div
         className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 py-3 pb-8 space-y-4"
-        style={dragDisplay ? { touchAction: "none" } : undefined}
+        style={dragIdx !== null ? { touchAction: "none" } : undefined}
       >
         {loading && (
           <div className="flex items-center justify-center h-32">
@@ -178,7 +197,7 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                 <div className="text-xs text-zinc-500 mb-2">選択中（{selected.length}種目）</div>
                 <div ref={listRef} className="space-y-2">
                   {selected.map((ex, idx) => {
-                    const isDragging = dragDisplay?.idx === idx;
+                    const isDragging = dragIdx === idx;
                     return (
                       <div
                         key={ex.plan.id}
@@ -189,19 +208,28 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                         }`}
                         style={
                           isDragging
-                            ? { transform: `translateY(${dragDisplay.offsetY}px)`, position: "relative", zIndex: 10 }
+                            ? { transform: `translateY(${dragOffsetY}px)`, position: "relative", zIndex: 50 }
                             : {}
                         }
                       >
-                        {/* ドラッグハンドル */}
+                        {/* ドラッグハンドル（長押しで並び替え起動） */}
                         <div
                           className="flex items-center justify-center w-8 h-10 touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
                           onTouchStart={(e) => {
                             e.stopPropagation();
-                            startDrag(idx, e.touches[0].clientY);
+                            const touch = e.touches[0];
+                            touchInitRef.current = { x: touch.clientX, y: touch.clientY, idx };
+                            longPressTimerRef.current = setTimeout(() => {
+                              longPressTimerRef.current = null;
+                              const initY = touchInitRef.current?.y ?? touch.clientY;
+                              dragRef.current = { currentIdx: idx, adjustedStartY: initY };
+                              setDragIdx(idx);
+                              setDragOffsetY(0);
+                              if (navigator.vibrate) navigator.vibrate(40);
+                            }, 350);
                           }}
                         >
-                          <svg width="14" height="20" viewBox="0 0 14 20" fill="none" className="text-zinc-500" aria-hidden="true">
+                          <svg width="14" height="20" viewBox="0 0 14 20" fill="none" className={isDragging ? "text-blue-400" : "text-zinc-500"} aria-hidden="true">
                             <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
                             <circle cx="10" cy="6"  r="1.5" fill="currentColor"/>
                             <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
