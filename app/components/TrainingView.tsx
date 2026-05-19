@@ -277,40 +277,49 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                   {/* セットリスト */}
                   <div className="space-y-2">
                     {/* ヘッダー行 */}
-                    <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 text-xs text-zinc-500 px-1">
+                    <div className="grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 text-xs text-zinc-500 px-1">
                       <div>Set</div>
                       <div>{isCardio ? "距離(m)" : "重量(kg)"}</div>
+                      <div />
                       <div>{isCardio ? "本数" : "回数"}</div>
-                      <div></div>
-                      <div></div>
+                      <div />
+                      <div />
                     </div>
                     {/* 目標行 */}
-                    <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 items-center text-xs text-zinc-500 bg-zinc-800/50 rounded-lg px-2 py-1.5">
+                    <div className="grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center text-xs text-zinc-500 bg-zinc-800/50 rounded-lg px-2 py-1.5">
                       <div>目標</div>
-                      <div>{isCardio ? (ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}m` : "-") : (ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg : "自重")}</div>
-                      <div>{ex.plan.目標レップ数}{isCardio ? "本" : ""}</div>
-                      <div></div>
-                      <div></div>
+                      <div className="text-center">{isCardio ? (ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}m` : "-") : (ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg : "自重")}</div>
+                      <div />
+                      <div className="text-center">{ex.plan.目標レップ数}{isCardio ? "本" : ""}</div>
+                      <div />
+                      <div />
                     </div>
                     {/* 前回実績行 */}
                     {ex.plan.前回重量kg !== null && (
-                      <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 items-center text-xs text-blue-400/70 px-2 py-1">
+                      <div className="grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center text-xs text-blue-400/70 px-2 py-1">
                         <div>前回</div>
-                        <div>{isCardio ? (ex.plan.前回重量kg > 0 ? `${ex.plan.前回重量kg}m` : "-") : (ex.plan.前回重量kg > 0 ? ex.plan.前回重量kg : "自重")}</div>
-                        <div>{ex.plan.前回レップ数 ?? "-"}{isCardio && ex.plan.前回レップ数 ? "本" : ""}</div>
-                        <div></div>
-                        <div></div>
+                        <div className="text-center">{isCardio ? (ex.plan.前回重量kg > 0 ? `${ex.plan.前回重量kg}m` : "-") : (ex.plan.前回重量kg > 0 ? ex.plan.前回重量kg : "自重")}</div>
+                        <div />
+                        <div className="text-center">{ex.plan.前回レップ数 ?? "-"}{isCardio && ex.plan.前回レップ数 ? "本" : ""}</div>
+                        <div />
+                        <div />
                       </div>
                     )}
                     {ex.sets.map((set, setIdx) => {
                       const achieved = isAchieved(set, ex.plan);
                       const hasData = set.重量kg !== "" && set.レップ数 !== "";
-                      const hasPrevSession = setIdx === 0 && ex.plan.前回重量kg !== null;
-                      const hasPrevSet = setIdx > 0;
+                      // 重量コピー元
+                      const weightSrc = setIdx === 0
+                        ? (ex.plan.前回重量kg !== null ? ex.plan.前回重量kg : null)
+                        : (ex.sets[setIdx - 1].重量kg !== "" ? ex.sets[setIdx - 1].重量kg : null);
+                      // 回数コピー元
+                      const repsSrc = setIdx === 0
+                        ? (ex.plan.前回レップ数 !== null ? ex.plan.前回レップ数 : null)
+                        : (ex.sets[setIdx - 1].レップ数 !== "" ? ex.sets[setIdx - 1].レップ数 : null);
                       return (
                         <div
                           key={setIdx}
-                          className={`grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 items-center rounded-lg px-2 py-1.5 ${hasData ? (achieved ? "bg-green-950/60 border border-green-800" : "bg-red-950/60 border border-red-800") : "bg-zinc-800/30"}`}
+                          className={`grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center rounded-lg px-2 py-1.5 ${hasData ? (achieved ? "bg-green-950/60 border border-green-800" : "bg-red-950/60 border border-red-800") : "bg-zinc-800/30"}`}
                         >
                           <div className="text-sm font-medium">{setIdx + 1}</div>
                           <input
@@ -321,8 +330,14 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                             onChange={(e) => updateSet(exIdx, setIdx, "重量kg", e.target.value)}
                             onFocus={() => { if (!timerRunning && setIdx > 0) { setTimerLeft(timerPreset); setTimerRunning(true); } }}
                             placeholder={ex.plan.目標重量kg > 0 ? String(ex.plan.目標重量kg) : "0"}
-                            className="bg-zinc-700 rounded-md px-2 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-zinc-700 rounded-md px-1 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
+                          {weightSrc !== null ? (
+                            <button
+                              onClick={() => updateSet(exIdx, setIdx, "重量kg", String(weightSrc))}
+                              className="flex items-center justify-center h-8 w-full text-zinc-400 text-sm active:text-white"
+                            >↑</button>
+                          ) : <div />}
                           <input
                             type="number"
                             inputMode="numeric"
@@ -330,28 +345,17 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                             value={set.レップ数}
                             onChange={(e) => updateSet(exIdx, setIdx, "レップ数", e.target.value)}
                             placeholder={String(ex.plan.目標レップ数)}
-                            className="bg-zinc-700 rounded-md px-2 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-zinc-700 rounded-md px-1 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
-                          {hasPrevSet ? (
+                          {repsSrc !== null ? (
                             <button
-                              onClick={() => copyPrevSet(exIdx, setIdx)}
-                              className="text-zinc-400 text-xs leading-none flex items-center justify-center h-8 w-full rounded bg-zinc-700/50 active:bg-zinc-600"
-                            >↑同</button>
-                          ) : hasPrevSession ? (
-                            <button
-                              onClick={() => setExercises((prev) => prev.map((e, i) => i !== exIdx ? e : {
-                                ...e,
-                                sets: e.sets.map((s, j) => j !== 0 ? s : {
-                                  重量kg: ex.plan.前回重量kg ?? "",
-                                  レップ数: ex.plan.前回レップ数 ?? "",
-                                }),
-                              }))}
-                              className="text-blue-400 text-xs leading-none flex items-center justify-center h-8 w-full rounded bg-blue-900/30 active:bg-blue-800/50"
-                            >前回</button>
+                              onClick={() => updateSet(exIdx, setIdx, "レップ数", String(repsSrc))}
+                              className="flex items-center justify-center h-8 w-full text-zinc-400 text-sm active:text-white"
+                            >↑</button>
                           ) : <div />}
                           <button
                             onClick={() => removeSet(exIdx, setIdx)}
-                            className="text-zinc-500 text-lg leading-none"
+                            className="text-zinc-500 text-lg leading-none flex items-center justify-center"
                           >×</button>
                         </div>
                       );
