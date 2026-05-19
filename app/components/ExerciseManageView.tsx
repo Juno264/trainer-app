@@ -2,10 +2,6 @@
 import { useState, useEffect } from "react";
 import type { ExercisePlan } from "../lib/types";
 
-type Props = {
-  onBack: () => void;
-};
-
 const BODY_PARTS = ["胸・肩・三頭", "背中・二頭", "脚・お尻"];
 
 type EditState = {
@@ -14,7 +10,7 @@ type EditState = {
   default_sets: number;
 };
 
-export default function ExerciseManageView({ onBack }: Props) {
+export default function ExerciseManageView() {
   const [selectedPart, setSelectedPart] = useState(BODY_PARTS[0]);
   const [byPart, setByPart] = useState<Record<string, ExercisePlan[]>>({});
   const [loading, setLoading] = useState(true);
@@ -122,15 +118,12 @@ export default function ExerciseManageView({ onBack }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-black text-white">
+    <div className="flex-1 flex flex-col min-h-0 bg-black text-white">
       {/* ヘッダー */}
       <div className="flex-shrink-0 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
-        <div className="flex items-center gap-3 mt-2">
-          <button onClick={onBack} className="text-zinc-400 text-lg">←</button>
-          <div>
-            <div className="text-xs text-zinc-500">種目・目標値</div>
-            <div className="text-lg font-bold">管理</div>
-          </div>
+        <div className="mt-2">
+          <div className="text-xs text-zinc-500">種目・目標値</div>
+          <div className="text-lg font-bold">管理</div>
         </div>
       </div>
 
@@ -152,7 +145,7 @@ export default function ExerciseManageView({ onBack }: Props) {
       </div>
 
       {/* 種目リスト */}
-      <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 pt-3 pb-safe-bottom space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 pt-3 pb-8 space-y-2">
         {loading && <div className="text-zinc-500 text-sm text-center py-8 animate-pulse">読み込み中...</div>}
 
         {exercises.map((ex) => (

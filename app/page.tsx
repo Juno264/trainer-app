@@ -5,8 +5,11 @@ import TrainingView from "./components/TrainingView";
 import CustomEditView from "./components/CustomEditView";
 import HistoryView from "./components/HistoryView";
 import ExerciseManageView from "./components/ExerciseManageView";
+import BottomTabBar, { type AppTab } from "./components/BottomTabBar";
+import HomeTab from "./components/HomeTab";
+import TrainTab from "./components/TrainTab";
 
-type Screen = "loading" | "recommend" | "custom" | "training" | "review" | "history" | "manage";
+type Overlay = "custom" | "training" | "review" | null;
 
 function makeState(plan: ExercisePlan): ExerciseState {
   return {
@@ -17,29 +20,6 @@ function makeState(plan: ExercisePlan): ExerciseState {
     expanded: false,
   };
 }
-
-const BODY_PART_EMOJI: Record<string, string> = {
-  "胸・肩・三頭": "💪",
-  "背中・二頭": "🦾",
-  "脚・お尻": "🦵",
-  "有酸素（プール）": "🏊",
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  久しぶり: "text-orange-400",
-  そろそろ: "text-yellow-400",
-  回復済み: "text-green-400",
-  疲労中: "text-zinc-500",
-  未実施: "text-zinc-400",
-};
-
-const STATUS_BAR: Record<string, string> = {
-  久しぶり: "bg-orange-500",
-  そろそろ: "bg-yellow-500",
-  回復済み: "bg-green-500",
-  疲労中: "bg-zinc-600",
-  未実施: "bg-blue-500",
-};
 
 const RATING_COLOR: Record<string, string> = {
   好調: "text-green-400",
@@ -54,7 +34,10 @@ const RATING_EMOJI: Record<string, string> = {
 };
 
 export default function Home() {
-  const [screen, setScreen] = useState<Screen>("loading");
+  const [activeTab, setActiveTab] = useState<AppTab>("home");
+  const [overlay, setOverlay] = useState<Overlay>(null);
+
+  const [loading, setLoading] = useState(true);
   const [bodyPartList, setBodyPartList] = useState<BodyPartInfo[]>([]);
   const [allExercisesByPart, setAllExercisesByPart] = useState<Record<string, ExercisePlan[]>>({});
   const [selectedBodyPart, setSelectedBodyPart] = useState<string>("");
@@ -66,7 +49,7 @@ export default function Home() {
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
-    setScreen("loading");
+    setLoading(true);
     setError(null);
     try {
       const [recRes, exRes] = await Promise.all([
@@ -88,10 +71,10 @@ export default function Home() {
         setSelectedBodyPart(recommended.名前);
         setExercises((exData[recommended.名前] ?? []).map(makeState));
       }
-      setScreen("recommend");
     } catch (e) {
       setError(String(e));
-      setScreen("recommend");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -100,31 +83,25 @@ export default function Home() {
     setExercises((allExercisesByPart[part] ?? []).map(makeState));
   };
 
-  const handleStart = () => setScreen("training");
-  const handleCustomEdit = () => setScreen("custom");
-
   const handleCustomStart = (selected: ExerciseState[]) => {
     setExercises(selected);
-    setScreen("training");
+    setOverlay("training");
   };
 
   const handleComplete = (r: ReviewResult) => {
     setReview(r);
-    setScreen("review");
+    setOverlay("review");
   };
 
-  const handleClose = () => fetchData();
+  const handleCloseReview = () => {
+    setReview(null);
+    setOverlay(null);
+    setActiveTab("home");
+    fetchData();
+  };
 
-  if (screen === "loading") {
-    return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-white">
-        <div className="text-4xl mb-4 animate-pulse">💪</div>
-        <div className="text-zinc-400 text-sm">メニューを取得中...</div>
-      </div>
-    );
-  }
-
-  if (screen === "training") {
+  // ── 全画面オーバーレイ ────────────────────────────────────────────────────
+  if (overlay === "training") {
     return (
       <TrainingView
         bodyPart={selectedBodyPart}
@@ -133,32 +110,24 @@ export default function Home() {
         condition={condition}
         setCondition={setCondition}
         onComplete={handleComplete}
-        onCancel={fetchData}
-        onPause={() => setScreen("recommend")}
+        onCancel={() => { setOverlay(null); setActiveTab("home"); fetchData(); }}
+        onPause={() => { setOverlay(null); setActiveTab("train"); }}
       />
     );
   }
 
-  if (screen === "history") {
-    return <HistoryView onBack={() => setScreen("recommend")} />;
-  }
-
-  if (screen === "manage") {
-    return <ExerciseManageView onBack={() => fetchData()} />;
-  }
-
-  if (screen === "custom") {
+  if (overlay === "custom") {
     return (
       <CustomEditView
         recommendedBodyPart={selectedBodyPart}
         selectedExercises={exercises}
         onStart={handleCustomStart}
-        onBack={() => setScreen("recommend")}
+        onBack={() => setOverlay(null)}
       />
     );
   }
 
-  if (screen === "review" && review) {
+  if (overlay === "review" && review) {
     return (
       <div className="fixed inset-0 bg-black text-white flex flex-col">
         <div className="px-4 pt-safe-top pb-4 border-b border-zinc-800">
@@ -204,7 +173,7 @@ export default function Home() {
         </div>
 
         <div className="px-4 pt-3 pb-safe-bottom">
-          <button onClick={handleClose} className="w-full py-4 rounded-xl text-base font-bold bg-zinc-800 active:bg-zinc-700">
+          <button onClick={handleCloseReview} className="w-full py-4 rounded-xl text-base font-bold bg-zinc-800 active:bg-zinc-700">
             閉じる
           </button>
         </div>
@@ -212,148 +181,48 @@ export default function Home() {
     );
   }
 
-  // 久しぶりバナーを表示する条件（2部位以上が久しぶり or 未実施）
-  const jisaburiCount = bodyPartList.filter((bp) => bp.状態 === "久しぶり" || bp.状態 === "未実施").length;
-  const selectedInfo = bodyPartList.find((bp) => bp.名前 === selectedBodyPart);
+  // ── ローディング ──────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-white">
+        <div className="text-4xl mb-4 animate-pulse">💪</div>
+        <div className="text-zinc-400 text-sm">メニューを取得中...</div>
+      </div>
+    );
+  }
 
-  // recommend screen
+  // ── タブレイアウト ────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 bg-black text-white flex flex-col">
-      {/* ヘッダー */}
-      <div className="flex-shrink-0 relative z-10 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
-        <div className="flex items-end justify-between mt-2">
-          <div>
-            <div className="text-xs text-zinc-500">今日はどこを鍛える？</div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setScreen("manage")}
-              className="text-xs text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-700"
-            >管理</button>
-            <button
-              onClick={() => setScreen("history")}
-              className="text-xs text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-700"
-            >履歴</button>
-          </div>
-        </div>
+    <div className="fixed inset-0 flex flex-col bg-black text-white">
+      <div className="flex-1 min-h-0 flex flex-col">
+        {activeTab === "home" && (
+          <HomeTab
+            bodyPartList={bodyPartList}
+            selectedBodyPart={selectedBodyPart}
+            error={error}
+            onRetry={fetchData}
+            onStartTraining={() => setOverlay("training")}
+            onGoToTrain={() => setActiveTab("train")}
+          />
+        )}
+        {activeTab === "train" && (
+          <TrainTab
+            bodyPartList={bodyPartList}
+            allExercisesByPart={allExercisesByPart}
+            selectedBodyPart={selectedBodyPart}
+            exercises={exercises}
+            error={error}
+            onRetry={fetchData}
+            onSelectBodyPart={handleSelectBodyPart}
+            onStartTraining={() => setOverlay("training")}
+            onCustomEdit={() => setOverlay("custom")}
+          />
+        )}
+        {activeTab === "history" && <HistoryView />}
+        {activeTab === "manage" && <ExerciseManageView />}
       </div>
 
-      {error ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-4 gap-4">
-          <div className="text-red-400 text-sm text-center">{error}</div>
-          <button onClick={fetchData} className="px-6 py-3 bg-zinc-800 rounded-xl text-sm">再試行</button>
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide">
-
-          {/* 久しぶりバナー */}
-          {jisaburiCount >= 2 && (
-            <div className="mx-4 mt-3 bg-amber-950/40 border border-amber-700/40 rounded-xl px-4 py-3">
-              <div className="text-xs font-semibold text-amber-400 mb-0.5">久しぶりのトレーニング</div>
-              <div className="text-xs text-amber-200/80">
-                どれを選んでも大きな刺激になります。最初の1セットで感触を確認してから重量を決めましょう。
-              </div>
-            </div>
-          )}
-
-          {/* 部位カードリスト */}
-          <div className="px-4 mt-3 space-y-2">
-            {bodyPartList.map((bp) => {
-              const isSelected = selectedBodyPart === bp.名前;
-              const barWidth = Math.min(100, bp.回復進捗 * 100);
-
-              const statusText =
-                bp.状態 === "未実施" ? "記録なし" :
-                bp.状態 === "疲労中" ? `回復中（${bp.回復目安日数}日で回復）` :
-                bp.状態 === "回復済み" ? `${bp.経過日数}日前` :
-                bp.状態 === "そろそろ" ? `${bp.経過日数}日前（そろそろ）` :
-                `${bp.経過日数}日ぶり`;
-
-              return (
-                <button
-                  key={bp.名前}
-                  onClick={() => handleSelectBodyPart(bp.名前)}
-                  className={`w-full px-4 py-3.5 rounded-xl text-left flex items-center gap-3 transition-colors border ${
-                    isSelected
-                      ? "bg-blue-950/50 border-blue-700/60"
-                      : "bg-zinc-900 border-transparent active:bg-zinc-800"
-                  }`}
-                >
-                  <div className="text-2xl">{BODY_PART_EMOJI[bp.名前] ?? "💪"}</div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{bp.名前}</span>
-                      {bp.おすすめ && (
-                        <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded-full leading-none">おすすめ</span>
-                      )}
-                      {bp.状態 === "そろそろ" && (
-                        <span className="text-xs bg-yellow-900/50 text-yellow-400 px-1.5 py-0.5 rounded-full leading-none">そろそろ</span>
-                      )}
-                      {bp.状態 === "久しぶり" && (
-                        <span className="text-xs bg-orange-900/50 text-orange-400 px-1.5 py-0.5 rounded-full leading-none">久しぶり</span>
-                      )}
-                    </div>
-                    <div className={`text-xs mt-1 ${STATUS_COLOR[bp.状態]}`}>{statusText}</div>
-                    {/* 回復バー */}
-                    <div className="mt-1.5 w-24 bg-zinc-800 rounded-full h-1">
-                      <div
-                        className={`h-1 rounded-full transition-all ${STATUS_BAR[bp.状態]}`}
-                        style={{ width: `${barWidth}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className={`text-lg ${isSelected ? "text-blue-400" : "text-zinc-600"}`}>›</div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 選択中部位の詳細 */}
-          {selectedBodyPart && selectedInfo && (
-            <div className="px-4 mt-4">
-              {selectedInfo.状態 === "そろそろ" && (
-                <div className="mb-3 bg-yellow-950/30 border border-yellow-800/40 rounded-xl px-4 py-2.5 text-xs text-yellow-300">
-                  {selectedInfo.経過日数}日前のトレーニングです。いいタイミングです。
-                </div>
-              )}
-              {selectedInfo.状態 === "久しぶり" && (
-                <div className="mb-3 bg-orange-950/30 border border-orange-800/40 rounded-xl px-4 py-2.5 text-xs text-orange-300">
-                  {selectedInfo.経過日数}日ぶりです。最初のセットは軽めで感触を確認してから重量を決めましょう。
-                </div>
-              )}
-
-              <div className="text-xs text-zinc-500 mb-2">
-                今日の種目（{exercises.length}種目）
-              </div>
-              <div className="space-y-2">
-                {exercises.map((ex) => (
-                  <div key={ex.plan.id} className="bg-zinc-900 rounded-xl px-4 py-3 flex items-center justify-between">
-                    <div className="font-medium text-sm">{ex.plan.種目名}</div>
-                    <div className="text-xs text-zinc-500 ml-2 text-right flex-shrink-0">
-                      {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
-                      {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* フッター */}
-      {!error && selectedBodyPart && (
-        <div className="flex-shrink-0 bg-zinc-950 border-t border-zinc-800 px-4 pt-3 pb-safe-bottom space-y-2">
-          <button onClick={handleStart} className="w-full py-4 rounded-xl text-base font-bold bg-blue-600 active:bg-blue-700">
-            開始する
-          </button>
-          <button onClick={handleCustomEdit} className="w-full py-3 rounded-xl text-sm font-medium bg-zinc-800 text-zinc-300 active:bg-zinc-700">
-            カスタム編集
-          </button>
-        </div>
-      )}
+      <BottomTabBar activeTab={activeTab} onSelect={setActiveTab} />
     </div>
   );
 }

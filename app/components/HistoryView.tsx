@@ -5,9 +5,6 @@ import type { HistorySession, ExercisePlan, StatsPoint, WeeklySummary } from "..
 
 const StatsChart = dynamic(() => import("./StatsChart"), { ssr: false });
 
-type Props = {
-  onBack: () => void;
-};
 
 type Tab = "記録" | "グラフ" | "カレンダー";
 
@@ -101,7 +98,7 @@ function CalendarView({ calendarData }: { calendarData: Record<string, string[]>
 }
 
 // ─── メインコンポーネント ────────────────────────────────────────────────
-export default function HistoryView({ onBack }: Props) {
+export default function HistoryView() {
   const [tab, setTab] = useState<Tab>("記録");
 
   // 記録タブ
@@ -160,11 +157,10 @@ export default function HistoryView({ onBack }: Props) {
   const isBodyweight = selectedPlanForGraph ? selectedPlanForGraph.目標重量kg === 0 : false;
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-black text-white">
+    <div className="flex-1 flex flex-col min-h-0 bg-black text-white">
       {/* ヘッダー */}
       <div className="flex-shrink-0 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-0">
         <div className="flex items-center gap-3 mt-2 pb-0">
-          <button onClick={onBack} className="text-zinc-400 text-lg pb-3">←</button>
           <div className="pb-3">
             <div className="text-xs text-zinc-500">過去の記録</div>
             <div className="text-lg font-bold">トレーニング履歴</div>
@@ -191,7 +187,7 @@ export default function HistoryView({ onBack }: Props) {
 
         {/* ─── 記録タブ ─── */}
         {tab === "記録" && (
-          <div className="px-4 pt-3 pb-safe-bottom space-y-3">
+          <div className="px-4 pt-3 pb-8 space-y-3">
             {/* 週次サマリーカード */}
             <div className="bg-zinc-900 rounded-xl overflow-hidden">
               <button
@@ -306,7 +302,7 @@ export default function HistoryView({ onBack }: Props) {
 
         {/* ─── グラフタブ ─── */}
         {tab === "グラフ" && (
-          <div className="px-4 pt-4 pb-safe-bottom space-y-4">
+          <div className="px-4 pt-4 pb-8 space-y-4">
             {/* 部位選択 */}
             <div className="flex gap-2">
               {BODY_PARTS.map((p) => (
@@ -376,7 +372,7 @@ export default function HistoryView({ onBack }: Props) {
 
         {/* ─── カレンダータブ ─── */}
         {tab === "カレンダー" && (
-          <div className="px-4 pt-4 pb-safe-bottom">
+          <div className="px-4 pt-4 pb-8">
             <CalendarView calendarData={calendarData} />
           </div>
         )}
