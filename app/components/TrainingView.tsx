@@ -123,14 +123,6 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
     }));
   };
 
-  const copyPrevSet = (exIdx: number, setIdx: number) => {
-    setExercises((prev) => prev.map((ex, i) => {
-      if (i !== exIdx) return ex;
-      const src = ex.sets[setIdx - 1];
-      return { ...ex, sets: ex.sets.map((s, j) => j !== setIdx ? s : { 重量kg: src.重量kg, レップ数: src.レップ数 }) };
-    }));
-  };
-
   const updateRpe = (exIdx: number, rpe: number) => {
     setExercises((prev) => prev.map((ex, i) => i !== exIdx ? ex : { ...ex, rpe }));
   };
@@ -294,27 +286,27 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                       <div />
                       <div />
                     </div>
-                    {/* 前回実績行 */}
-                    {ex.plan.前回重量kg !== null && (
-                      <div className="grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center text-xs text-blue-400/70 px-2 py-1">
-                        <div>前回</div>
-                        <div className="text-center">{isCardio ? (ex.plan.前回重量kg > 0 ? `${ex.plan.前回重量kg}m` : "-") : (ex.plan.前回重量kg > 0 ? ex.plan.前回重量kg : "自重")}</div>
+                    {/* 前回実績行（セットごと） */}
+                    {ex.plan.前回セット.map((ps, pi) => (
+                      <div key={pi} className="grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center text-xs text-blue-400/70 px-2 py-0.5">
+                        <div className="text-blue-400/50">{pi === 0 ? "前回" : ""}</div>
+                        <div className="text-center">{isCardio ? (ps.重量kg > 0 ? `${ps.重量kg}m` : "-") : (ps.重量kg > 0 ? `${ps.重量kg}` : "自重")}</div>
                         <div />
-                        <div className="text-center">{ex.plan.前回レップ数 ?? "-"}{isCardio && ex.plan.前回レップ数 ? "本" : ""}</div>
+                        <div className="text-center">{ps.レップ数}{isCardio ? "本" : "rep"}</div>
                         <div />
                         <div />
                       </div>
-                    )}
+                    ))}
                     {ex.sets.map((set, setIdx) => {
                       const achieved = isAchieved(set, ex.plan);
                       const hasData = set.重量kg !== "" && set.レップ数 !== "";
                       // 重量コピー元
                       const weightSrc = setIdx === 0
-                        ? (ex.plan.前回重量kg !== null ? ex.plan.前回重量kg : null)
+                        ? (ex.plan.前回セット[0]?.重量kg ?? null)
                         : (ex.sets[setIdx - 1].重量kg !== "" ? ex.sets[setIdx - 1].重量kg : null);
                       // 回数コピー元
                       const repsSrc = setIdx === 0
-                        ? (ex.plan.前回レップ数 !== null ? ex.plan.前回レップ数 : null)
+                        ? (ex.plan.前回セット[0]?.レップ数 ?? null)
                         : (ex.sets[setIdx - 1].レップ数 !== "" ? ex.sets[setIdx - 1].レップ数 : null);
                       return (
                         <div

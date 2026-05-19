@@ -11,26 +11,39 @@ export async function GET() {
         .order("sort_order", { ascending: true }),
       supabase
         .from("training_records")
-        .select("exercise_name, weight_kg, reps, trained_at")
-        .eq("set_num", 1)
-        .order("trained_at", { ascending: false }),
+        .select("exercise_name, weight_kg, reps, trained_at, set_num")
+        .order("trained_at", { ascending: false })
+        .order("set_num", { ascending: true }),
     ]);
 
     if (exErr) throw exErr;
     if (recErr) throw recErr;
 
-    // Latest record per exercise (already sorted desc by date)
-    const latestByName: Record<string, { weight_kg: number; reps: number }> = {};
+    // 種目ごとに最新セッション日付を特定し、そのセットをまとめる
+    const latestDateByName: Record<string, string> = {};
+    const setsByNameDate: Record<string, Record<string, { weight_kg: number; reps: number; set_num: number }[]>> = {};
+
     for (const r of records ?? []) {
-      if (!latestByName[r.exercise_name]) {
-        latestByName[r.exercise_name] = { weight_kg: r.weight_kg, reps: r.reps };
-      }
+      const name = r.exercise_name;
+      const date = r.trained_at as string;
+      if (!latestDateByName[name]) latestDateByName[name] = date;
+      if (!setsByNameDate[name]) setsByNameDate[name] = {};
+      if (!setsByNameDate[name][date]) setsByNameDate[name][date] = [];
+      setsByNameDate[name][date].push({ weight_kg: r.weight_kg, reps: r.reps, set_num: r.set_num });
     }
 
     const byPart: Record<string, ExercisePlan[]> = {};
     for (const ex of exList ?? []) {
       const part = ex.body_part;
       if (!byPart[part]) byPart[part] = [];
+
+      const latestDate = latestDateByName[ex.name];
+      const prevSets = latestDate
+        ? (setsByNameDate[ex.name]?.[latestDate] ?? [])
+            .sort((a, b) => a.set_num - b.set_num)
+            .map((s) => ({ 重量kg: s.weight_kg, レップ数: s.reps }))
+        : [];
+
       byPart[part].push({
         id: ex.id,
         種目名: ex.name,
@@ -38,8 +51,7 @@ export async function GET() {
         目標重量kg: ex.target_weight_kg,
         目標レップ数: ex.target_reps,
         セット数: ex.default_sets,
-        前回重量kg: latestByName[ex.name]?.weight_kg ?? null,
-        前回レップ数: latestByName[ex.name]?.reps ?? null,
+        前回セット: prevSets,
       });
     }
 

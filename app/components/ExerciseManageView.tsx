@@ -106,8 +106,7 @@ export default function ExerciseManageView({ onBack }: Props) {
         目標重量kg: data.target_weight_kg,
         目標レップ数: data.target_reps,
         セット数: data.default_sets,
-        前回重量kg: null,
-        前回レップ数: null,
+        前回セット: [],
       };
       setByPart((prev) => ({
         ...prev,

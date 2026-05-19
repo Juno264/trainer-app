@@ -12,6 +12,11 @@ export type BodyPartInfo = {
   おすすめ: boolean;
 };
 
+export type PrevSet = {
+  重量kg: number;
+  レップ数: number;
+};
+
 export type ExercisePlan = {
   id: string;
   種目名: string;
@@ -19,8 +24,7 @@ export type ExercisePlan = {
   目標重量kg: number;
   目標レップ数: number;
   セット数: number;
-  前回重量kg: number | null;
-  前回レップ数: number | null;
+  前回セット: PrevSet[];
 };
 
 export type RecommendData = {
