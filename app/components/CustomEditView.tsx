@@ -201,20 +201,27 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                     return (
                       <div
                         key={ex.plan.id}
-                        className={`flex items-center gap-2 rounded-xl px-3 py-3 transition-colors ${
+                        className={`flex items-center gap-2 rounded-xl px-3 py-3 select-none [-webkit-user-select:none] [-webkit-touch-callout:none] ${
                           isDragging
-                            ? "bg-blue-900/40 border border-blue-700/50 shadow-lg shadow-black/40"
-                            : "bg-zinc-900"
+                            ? "bg-blue-900/40 border border-blue-700/50 shadow-2xl shadow-blue-900/40"
+                            : "bg-zinc-900 border border-transparent"
                         }`}
-                        style={
-                          isDragging
-                            ? { transform: `translateY(${dragOffsetY}px)`, position: "relative", zIndex: 50 }
-                            : {}
-                        }
+                        style={{
+                          transition:
+                            "scale 180ms ease-out, box-shadow 200ms ease-out, background-color 200ms ease-out, border-color 200ms ease-out",
+                          ...(isDragging
+                            ? {
+                                translate: `0 ${dragOffsetY}px`,
+                                scale: "1.04",
+                                position: "relative",
+                                zIndex: 50,
+                              }
+                            : {}),
+                        }}
                       >
                         {/* ドラッグハンドル（長押しで並び替え起動） */}
                         <div
-                          className="flex items-center justify-center w-8 h-10 touch-none cursor-grab active:cursor-grabbing flex-shrink-0"
+                          className="flex items-center justify-center w-8 h-10 touch-none select-none [-webkit-user-select:none] [-webkit-touch-callout:none] cursor-grab active:cursor-grabbing flex-shrink-0"
                           onTouchStart={(e) => {
                             e.stopPropagation();
                             const touch = e.touches[0];
