@@ -133,6 +133,8 @@ export default function Home() {
         condition={condition}
         setCondition={setCondition}
         onComplete={handleComplete}
+        onCancel={fetchData}
+        onPause={() => setScreen("recommend")}
       />
     );
   }

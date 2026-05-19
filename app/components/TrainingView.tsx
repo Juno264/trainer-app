@@ -9,12 +9,15 @@ type Props = {
   condition: Condition;
   setCondition: (c: Condition) => void;
   onComplete: (review: ReviewResult) => void;
+  onCancel: () => void;
+  onPause: () => void;
 };
 
 const CONDITIONS: Condition[] = ["良好", "普通", "疲れ気味"];
 const TIMER_PRESETS = [60, 90, 120];
 
-export default function TrainingView({ bodyPart, exercises, setExercises, condition, setCondition, onComplete }: Props) {
+export default function TrainingView({ bodyPart, exercises, setExercises, condition, setCondition, onComplete, onCancel, onPause }: Props) {
+  const [showBackMenu, setShowBackMenu] = useState(false);
   const [timerPreset, setTimerPreset] = useState(90);
   const [timerLeft, setTimerLeft] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -183,10 +186,45 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
 
   return (
     <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
+      {/* 戻る確認モーダル */}
+      {showBackMenu && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/70" onClick={() => setShowBackMenu(false)}>
+          <div className="w-full bg-zinc-900 rounded-t-2xl px-4 pt-5 pb-safe-bottom" onClick={(e) => e.stopPropagation()}>
+            <div className="text-sm font-semibold text-zinc-300 mb-1">トレーニングを中断しますか？</div>
+            <div className="text-xs text-zinc-500 mb-4">入力済みのデータはまだ保存されていません</div>
+            <div className="space-y-2">
+              <button
+                onClick={onPause}
+                className="w-full py-3.5 rounded-xl text-sm font-semibold bg-blue-600 active:bg-blue-700"
+              >
+                データを保持してホームへ
+              </button>
+              <button
+                onClick={onCancel}
+                className="w-full py-3.5 rounded-xl text-sm font-semibold bg-zinc-800 text-red-400 active:bg-zinc-700"
+              >
+                キャンセル（データを破棄）
+              </button>
+              <button
+                onClick={() => setShowBackMenu(false)}
+                className="w-full py-3.5 rounded-xl text-sm text-zinc-400 active:bg-zinc-800"
+              >
+                トレーニングを続ける
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ヘッダー */}
       <div className="flex-shrink-0 relative z-10 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
-        <div className="text-xs text-zinc-500 mt-2">トレーニング中</div>
-        <div className="text-lg font-bold">{bodyPart}</div>
+        <div className="flex items-center gap-3 mt-2">
+          <button onClick={() => setShowBackMenu(true)} className="text-zinc-400 text-lg">←</button>
+          <div>
+            <div className="text-xs text-zinc-500">トレーニング中</div>
+            <div className="text-lg font-bold">{bodyPart}</div>
+          </div>
+        </div>
         {/* 体調選択 */}
         <div className="flex gap-2 mt-2">
           {CONDITIONS.map((c) => (
