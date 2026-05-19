@@ -277,7 +277,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                   {/* セットリスト */}
                   <div className="space-y-2">
                     {/* ヘッダー行 */}
-                    <div className="grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 text-xs text-zinc-500 px-1">
+                    <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 text-xs text-zinc-500 px-1">
                       <div>Set</div>
                       <div>{isCardio ? "距離(m)" : "重量(kg)"}</div>
                       <div>{isCardio ? "本数" : "回数"}</div>
@@ -285,7 +285,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                       <div></div>
                     </div>
                     {/* 目標行 */}
-                    <div className="grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 items-center text-xs text-zinc-500 bg-zinc-800/50 rounded-lg px-2 py-1.5">
+                    <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 items-center text-xs text-zinc-500 bg-zinc-800/50 rounded-lg px-2 py-1.5">
                       <div>目標</div>
                       <div>{isCardio ? (ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}m` : "-") : (ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg : "自重")}</div>
                       <div>{ex.plan.目標レップ数}{isCardio ? "本" : ""}</div>
@@ -294,7 +294,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                     </div>
                     {/* 前回実績行 */}
                     {ex.plan.前回重量kg !== null && (
-                      <div className="grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 items-center text-xs text-blue-400/70 px-2 py-1">
+                      <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 items-center text-xs text-blue-400/70 px-2 py-1">
                         <div>前回</div>
                         <div>{isCardio ? (ex.plan.前回重量kg > 0 ? `${ex.plan.前回重量kg}m` : "-") : (ex.plan.前回重量kg > 0 ? ex.plan.前回重量kg : "自重")}</div>
                         <div>{ex.plan.前回レップ数 ?? "-"}{isCardio && ex.plan.前回レップ数 ? "本" : ""}</div>
@@ -305,35 +305,49 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                     {ex.sets.map((set, setIdx) => {
                       const achieved = isAchieved(set, ex.plan);
                       const hasData = set.重量kg !== "" && set.レップ数 !== "";
+                      const hasPrevSession = setIdx === 0 && ex.plan.前回重量kg !== null;
+                      const hasPrevSet = setIdx > 0;
                       return (
                         <div
                           key={setIdx}
-                          className={`grid grid-cols-[2rem_1fr_1fr_2rem_2rem] gap-2 items-center rounded-lg px-2 py-1.5 ${hasData ? (achieved ? "bg-green-950/60 border border-green-800" : "bg-red-950/60 border border-red-800") : "bg-zinc-800/30"}`}
+                          className={`grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 items-center rounded-lg px-2 py-1.5 ${hasData ? (achieved ? "bg-green-950/60 border border-green-800" : "bg-red-950/60 border border-red-800") : "bg-zinc-800/30"}`}
                         >
                           <div className="text-sm font-medium">{setIdx + 1}</div>
                           <input
                             type="number"
-                            inputMode="numeric"
+                            inputMode="decimal"
+                            autoComplete="off"
                             value={set.重量kg}
                             onChange={(e) => updateSet(exIdx, setIdx, "重量kg", e.target.value)}
                             onFocus={() => { if (!timerRunning && setIdx > 0) { setTimerLeft(timerPreset); setTimerRunning(true); } }}
-                            placeholder={ex.plan.目標重量kg > 0 ? String(ex.plan.目標重量kg) : (isCardio ? "0" : "0")}
+                            placeholder={ex.plan.目標重量kg > 0 ? String(ex.plan.目標重量kg) : "0"}
                             className="bg-zinc-700 rounded-md px-2 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
                           <input
                             type="number"
                             inputMode="numeric"
+                            autoComplete="off"
                             value={set.レップ数}
                             onChange={(e) => updateSet(exIdx, setIdx, "レップ数", e.target.value)}
                             placeholder={String(ex.plan.目標レップ数)}
                             className="bg-zinc-700 rounded-md px-2 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
-                          {setIdx > 0 ? (
+                          {hasPrevSet ? (
                             <button
                               onClick={() => copyPrevSet(exIdx, setIdx)}
-                              className="text-zinc-400 text-base leading-none flex items-center justify-center"
-                              title="前セットと同じ"
-                            >↑</button>
+                              className="text-zinc-400 text-xs leading-none flex items-center justify-center h-8 w-full rounded bg-zinc-700/50 active:bg-zinc-600"
+                            >↑同</button>
+                          ) : hasPrevSession ? (
+                            <button
+                              onClick={() => setExercises((prev) => prev.map((e, i) => i !== exIdx ? e : {
+                                ...e,
+                                sets: e.sets.map((s, j) => j !== 0 ? s : {
+                                  重量kg: ex.plan.前回重量kg ?? "",
+                                  レップ数: ex.plan.前回レップ数 ?? "",
+                                }),
+                              }))}
+                              className="text-blue-400 text-xs leading-none flex items-center justify-center h-8 w-full rounded bg-blue-900/30 active:bg-blue-800/50"
+                            >前回</button>
                           ) : <div />}
                           <button
                             onClick={() => removeSet(exIdx, setIdx)}
