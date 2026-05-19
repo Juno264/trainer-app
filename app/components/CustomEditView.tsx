@@ -198,7 +198,14 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                             startDrag(idx, e.touches[0].clientY);
                           }}
                         >
-                          <span className="text-zinc-500 text-lg select-none leading-none">⠿</span>
+                          <svg width="14" height="20" viewBox="0 0 14 20" fill="none" className="text-zinc-500" aria-hidden="true">
+                            <circle cx="4" cy="6"  r="1.5" fill="currentColor"/>
+                            <circle cx="10" cy="6"  r="1.5" fill="currentColor"/>
+                            <circle cx="4" cy="10" r="1.5" fill="currentColor"/>
+                            <circle cx="10" cy="10" r="1.5" fill="currentColor"/>
+                            <circle cx="4" cy="14" r="1.5" fill="currentColor"/>
+                            <circle cx="10" cy="14" r="1.5" fill="currentColor"/>
+                          </svg>
                         </div>
 
                         <div className="flex-1 min-w-0">
