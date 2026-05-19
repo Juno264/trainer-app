@@ -123,7 +123,7 @@ export default function ExerciseManageView({ onBack }: Props) {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-black text-white">
       {/* ヘッダー */}
       <div className="flex-shrink-0 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
         <div className="flex items-center gap-3 mt-2">
@@ -153,7 +153,7 @@ export default function ExerciseManageView({ onBack }: Props) {
       </div>
 
       {/* 種目リスト */}
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-4 pt-3 pb-safe-bottom space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 pt-3 pb-safe-bottom space-y-2">
         {loading && <div className="text-zinc-500 text-sm text-center py-8 animate-pulse">読み込み中...</div>}
 
         {exercises.map((ex) => (

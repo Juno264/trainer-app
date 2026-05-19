@@ -160,7 +160,7 @@ export default function HistoryView({ onBack }: Props) {
   const isBodyweight = selectedPlanForGraph ? selectedPlanForGraph.目標重量kg === 0 : false;
 
   return (
-    <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-black text-white">
       {/* ヘッダー */}
       <div className="flex-shrink-0 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-0">
         <div className="flex items-center gap-3 mt-2 pb-0">
@@ -187,7 +187,7 @@ export default function HistoryView({ onBack }: Props) {
       </div>
 
       {/* コンテンツ */}
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide">
 
         {/* ─── 記録タブ ─── */}
         {tab === "記録" && (

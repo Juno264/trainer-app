@@ -117,7 +117,7 @@ export default function Home() {
 
   if (screen === "loading") {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-white">
         <div className="text-4xl mb-4 animate-pulse">💪</div>
         <div className="text-zinc-400 text-sm">メニューを取得中...</div>
       </div>
@@ -158,13 +158,13 @@ export default function Home() {
 
   if (screen === "review" && review) {
     return (
-      <div className="h-screen overflow-hidden bg-black text-white flex flex-col">
+      <div className="fixed inset-0 bg-black text-white flex flex-col">
         <div className="px-4 pt-safe-top pb-4 border-b border-zinc-800">
           <div className="mt-4 text-xs text-zinc-500">トレーニング完了</div>
           <div className="text-xl font-bold mt-1">{selectedBodyPart}</div>
         </div>
 
-        <div className="flex-1 min-h-0 px-4 py-4 space-y-4 overflow-y-auto">
+        <div className="flex-1 min-h-0 px-4 py-4 space-y-4 overflow-y-scroll scrollbar-hide">
           <div className="bg-zinc-900 rounded-xl p-4">
             <div className="text-xs text-zinc-500 mb-2">総合評価</div>
             <div className={`text-3xl font-bold flex items-center gap-2 ${RATING_COLOR[review.総合評価]}`}>
@@ -216,7 +216,7 @@ export default function Home() {
 
   // recommend screen
   return (
-    <div className="h-screen overflow-hidden bg-black text-white flex flex-col">
+    <div className="fixed inset-0 bg-black text-white flex flex-col">
       {/* ヘッダー */}
       <div className="flex-shrink-0 relative z-10 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
         <div className="flex items-end justify-between mt-2">
@@ -242,7 +242,7 @@ export default function Home() {
           <button onClick={fetchData} className="px-6 py-3 bg-zinc-800 rounded-xl text-sm">再試行</button>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+        <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide">
 
           {/* 久しぶりバナー */}
           {jisaburiCount >= 2 && (

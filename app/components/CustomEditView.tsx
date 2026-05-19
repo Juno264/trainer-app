@@ -122,7 +122,7 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
   };
 
   return (
-    <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-black text-white">
       {/* ヘッダー */}
       <div className="flex-shrink-0 bg-black border-b border-zinc-800 px-4 pt-safe-top pb-3">
         <div className="flex items-center gap-3 mt-2">
@@ -160,7 +160,7 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
       </div>
 
       {/* スクロール可能なコンテンツ */}
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-4 py-3 pb-8 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 py-3 pb-8 space-y-4">
         {loading && (
           <div className="flex items-center justify-center h-32">
             <div className="text-zinc-500 text-sm animate-pulse">読み込み中...</div>
