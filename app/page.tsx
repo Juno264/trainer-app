@@ -26,6 +26,7 @@ const BODY_PART_EMOJI: Record<string, string> = {
 
 const STATUS_COLOR: Record<string, string> = {
   久しぶり: "text-orange-400",
+  そろそろ: "text-yellow-400",
   回復済み: "text-green-400",
   疲労中: "text-zinc-500",
   未実施: "text-zinc-400",
@@ -33,6 +34,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 const STATUS_BAR: Record<string, string> = {
   久しぶり: "bg-orange-500",
+  そろそろ: "bg-yellow-500",
   回復済み: "bg-green-500",
   疲労中: "bg-zinc-600",
   未実施: "bg-blue-500",
@@ -203,7 +205,7 @@ export default function Home() {
     );
   }
 
-  // 久しぶりバナーを表示する条件（3部位以上が久しぶり or 未実施）
+  // 久しぶりバナーを表示する条件（2部位以上が久しぶり or 未実施）
   const jisaburiCount = bodyPartList.filter((bp) => bp.状態 === "久しぶり" || bp.状態 === "未実施").length;
   const selectedInfo = bodyPartList.find((bp) => bp.名前 === selectedBodyPart);
 
@@ -232,7 +234,7 @@ export default function Home() {
         <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pb-36">
 
           {/* 久しぶりバナー */}
-          {jisaburiCount >= 3 && (
+          {jisaburiCount >= 2 && (
             <div className="mx-4 mt-3 bg-amber-950/40 border border-amber-700/40 rounded-xl px-4 py-3">
               <div className="text-xs font-semibold text-amber-400 mb-0.5">久しぶりのトレーニング</div>
               <div className="text-xs text-amber-200/80">
@@ -249,9 +251,10 @@ export default function Home() {
 
               const statusText =
                 bp.状態 === "未実施" ? "記録なし" :
-                bp.状態 === "疲労中" ? `回復中（${bp.回復目安日数}日回復）` :
-                bp.状態 === "久しぶり" ? `${bp.経過日数}日ぶり` :
-                `${bp.経過日数}日前`;
+                bp.状態 === "疲労中" ? `回復中（${bp.回復目安日数}日で回復）` :
+                bp.状態 === "回復済み" ? `${bp.経過日数}日前` :
+                bp.状態 === "そろそろ" ? `${bp.経過日数}日前（そろそろ）` :
+                `${bp.経過日数}日ぶり`;
 
               return (
                 <button
@@ -270,6 +273,9 @@ export default function Home() {
                       <span className="font-semibold text-sm">{bp.名前}</span>
                       {bp.おすすめ && (
                         <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded-full leading-none">おすすめ</span>
+                      )}
+                      {bp.状態 === "そろそろ" && (
+                        <span className="text-xs bg-yellow-900/50 text-yellow-400 px-1.5 py-0.5 rounded-full leading-none">そろそろ</span>
                       )}
                       {bp.状態 === "久しぶり" && (
                         <span className="text-xs bg-orange-900/50 text-orange-400 px-1.5 py-0.5 rounded-full leading-none">久しぶり</span>
@@ -294,7 +300,11 @@ export default function Home() {
           {/* 選択中部位の詳細 */}
           {selectedBodyPart && selectedInfo && (
             <div className="px-4 mt-4">
-              {/* 久しぶり注意 */}
+              {selectedInfo.状態 === "そろそろ" && (
+                <div className="mb-3 bg-yellow-950/30 border border-yellow-800/40 rounded-xl px-4 py-2.5 text-xs text-yellow-300">
+                  {selectedInfo.経過日数}日前のトレーニングです。いいタイミングです。
+                </div>
+              )}
               {selectedInfo.状態 === "久しぶり" && (
                 <div className="mb-3 bg-orange-950/30 border border-orange-800/40 rounded-xl px-4 py-2.5 text-xs text-orange-300">
                   {selectedInfo.経過日数}日ぶりです。最初のセットは軽めで感触を確認してから重量を決めましょう。

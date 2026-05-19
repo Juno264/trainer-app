@@ -7,7 +7,8 @@ export async function GET() {
     const [{ data: exList, error: exErr }, { data: records, error: recErr }] = await Promise.all([
       supabase
         .from("exercises")
-        .select("id, name, body_part, target_weight_kg, target_reps, default_sets"),
+        .select("id, name, body_part, target_weight_kg, target_reps, default_sets, sort_order")
+        .order("sort_order", { ascending: true }),
       supabase
         .from("training_records")
         .select("exercise_name, weight_kg, reps, trained_at")

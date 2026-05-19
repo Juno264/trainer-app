@@ -1,7 +1,7 @@
 export type Condition = "良好" | "普通" | "疲れ気味";
 export type Rating = "好調" | "普通" | "要注意";
 export type WeightChange = "重量UP" | "維持" | "重量DOWN";
-export type PartStatus = "未実施" | "疲労中" | "回復済み" | "久しぶり";
+export type PartStatus = "未実施" | "疲労中" | "回復済み" | "そろそろ" | "久しぶり";
 
 export type BodyPartInfo = {
   名前: string;
