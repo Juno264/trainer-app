@@ -68,3 +68,15 @@ export type HistorySession = {
   exercises: HistoryExercise[];
   review: HistoryReview | null;
 };
+
+export type StatsPoint = {
+  date: string;
+  weight_kg: number;
+  reps: number;
+};
+
+export type WeeklySummary = {
+  summary: string;
+  period: { from: string; to: string };
+  sessionCount: number;
+};

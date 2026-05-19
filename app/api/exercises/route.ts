@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../lib/supabase";
 import type { ExercisePlan } from "../../lib/types";
 
@@ -47,5 +47,28 @@ export async function GET() {
   } catch (error) {
     console.error("Exercises error:", error);
     return NextResponse.json({ error: "種目の取得に失敗しました", detail: String(error) }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { data, error } = await supabase
+      .from("exercises")
+      .insert({
+        name: body.name,
+        body_part: body.body_part,
+        default_sets: body.default_sets ?? 3,
+        target_weight_kg: body.target_weight_kg ?? 0,
+        target_reps: body.target_reps ?? 10,
+        sort_order: body.sort_order ?? 99,
+      })
+      .select("id, name, body_part, target_weight_kg, target_reps, default_sets, sort_order")
+      .single();
+    if (error) throw error;
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Exercise add error:", error);
+    return NextResponse.json({ error: "種目の追加に失敗しました", detail: String(error) }, { status: 500 });
   }
 }

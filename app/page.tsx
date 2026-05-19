@@ -4,8 +4,9 @@ import type { ExercisePlan, ExerciseState, RecommendData, BodyPartInfo, Conditio
 import TrainingView from "./components/TrainingView";
 import CustomEditView from "./components/CustomEditView";
 import HistoryView from "./components/HistoryView";
+import ExerciseManageView from "./components/ExerciseManageView";
 
-type Screen = "loading" | "recommend" | "custom" | "training" | "review" | "history";
+type Screen = "loading" | "recommend" | "custom" | "training" | "review" | "history" | "manage";
 
 function makeState(plan: ExercisePlan): ExerciseState {
   return {
@@ -140,6 +141,10 @@ export default function Home() {
     return <HistoryView onBack={() => setScreen("recommend")} />;
   }
 
+  if (screen === "manage") {
+    return <ExerciseManageView onBack={() => fetchData()} />;
+  }
+
   if (screen === "custom") {
     return (
       <CustomEditView
@@ -218,10 +223,16 @@ export default function Home() {
           <div>
             <div className="text-xs text-zinc-500">今日はどこを鍛える？</div>
           </div>
-          <button
-            onClick={() => setScreen("history")}
-            className="text-xs text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-700"
-          >履歴</button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setScreen("manage")}
+              className="text-xs text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-700"
+            >管理</button>
+            <button
+              onClick={() => setScreen("history")}
+              className="text-xs text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-700"
+            >履歴</button>
+          </div>
         </div>
       </div>
 
