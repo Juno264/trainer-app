@@ -191,7 +191,7 @@ export default function HistoryView({ onBack }: Props) {
 
         {/* ─── 記録タブ ─── */}
         {tab === "記録" && (
-          <div className="px-4 py-3 space-y-3">
+          <div className="px-4 pt-3 pb-8 space-y-3">
             {/* 週次サマリーカード */}
             <div className="bg-zinc-900 rounded-xl overflow-hidden">
               <button
@@ -306,7 +306,7 @@ export default function HistoryView({ onBack }: Props) {
 
         {/* ─── グラフタブ ─── */}
         {tab === "グラフ" && (
-          <div className="px-4 py-4 space-y-4">
+          <div className="px-4 pt-4 pb-8 space-y-4">
             {/* 部位選択 */}
             <div className="flex gap-2">
               {BODY_PARTS.map((p) => (
@@ -376,7 +376,7 @@ export default function HistoryView({ onBack }: Props) {
 
         {/* ─── カレンダータブ ─── */}
         {tab === "カレンダー" && (
-          <div className="px-4 py-4">
+          <div className="px-4 pt-4 pb-8">
             <CalendarView calendarData={calendarData} />
           </div>
         )}
