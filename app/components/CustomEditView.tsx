@@ -9,7 +9,7 @@ type Props = {
   onBack: () => void;
 };
 
-const BODY_PARTS = ["胸・三頭", "背中・二頭", "脚・お尻", "肩・腕", "有酸素（プール）"];
+const BODY_PARTS = ["胸・肩・三頭", "背中・二頭", "脚・お尻", "有酸素（プール）"];
 const MAX_PARTS = 3;
 
 function makeExerciseState(plan: ExercisePlan): ExerciseState {

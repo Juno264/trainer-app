@@ -18,10 +18,9 @@ function makeState(plan: ExercisePlan): ExerciseState {
 }
 
 const BODY_PART_EMOJI: Record<string, string> = {
-  "胸・三頭": "💪",
+  "胸・肩・三頭": "💪",
   "背中・二頭": "🦾",
   "脚・お尻": "🦵",
-  "肩・腕": "💥",
   "有酸素（プール）": "🏊",
 };
 

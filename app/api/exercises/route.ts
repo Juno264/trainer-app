@@ -5,6 +5,12 @@ import type { ExercisePlan } from "../../lib/types";
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY });
 
+// Notion の部位 select 値を新しい3分割名にマッピング
+const PART_MAP: Record<string, string> = {
+  "胸・三頭": "胸・肩・三頭",
+  "肩・腕": "胸・肩・三頭",
+};
+
 export async function GET() {
   try {
     // 種目マスタと前回実績を並行取得
@@ -46,7 +52,8 @@ export async function GET() {
         number?: number | null;
         select?: { name: string } | null;
       }>;
-      const 部位 = props["部位"]?.select?.name ?? "";
+      const raw部位 = props["部位"]?.select?.name ?? "";
+      const 部位 = PART_MAP[raw部位] ?? raw部位;
       const 種目名 = props["種目名"]?.title?.[0]?.plain_text ?? "";
       if (!部位 || !種目名) continue;
       if (!byPart[部位]) byPart[部位] = [];

@@ -54,7 +54,7 @@ export async function GET() {
           _疲労中: 状態 === "疲労中",
         };
       })
-      .filter((bp) => bp.名前 !== "" && bp.名前 !== CARDIO);
+      .filter((bp) => bp.名前 !== "" && bp.名前 !== CARDIO && !bp.名前.startsWith("_"));
 
     // 疲労中を末尾に、それ以外は elapsed/recovery 比が高い順
     bodyParts.sort((a, b) => {
