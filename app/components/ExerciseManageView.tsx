@@ -153,7 +153,7 @@ export default function ExerciseManageView({ onBack }: Props) {
       </div>
 
       {/* 種目リスト */}
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-4 pt-3 pb-8 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-4 pt-3 pb-safe-bottom space-y-2">
         {loading && <div className="text-zinc-500 text-sm text-center py-8 animate-pulse">読み込み中...</div>}
 
         {exercises.map((ex) => (
