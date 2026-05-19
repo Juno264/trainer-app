@@ -5,6 +5,11 @@ import type { HistorySession, HistoryReview, Rating, WeightChange } from "../../
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY });
 
+const PART_MAP: Record<string, string> = {
+  "胸・三頭": "胸・肩・三頭",
+  "肩・腕": "胸・肩・三頭",
+};
+
 export async function GET() {
   try {
     // トレーニング記録を取得
@@ -28,7 +33,8 @@ export async function GET() {
       }>;
       const 種目名 = props["種目名"]?.title?.[0]?.plain_text ?? "";
       const date = props["実施日"]?.date?.start ?? "";
-      const 部位 = props["部位"]?.select?.name ?? "";
+      const raw部位 = props["部位"]?.select?.name ?? "";
+      const 部位 = PART_MAP[raw部位] ?? raw部位;
       const 重量kg = props["重量kg"]?.number ?? 0;
       const レップ数 = props["レップ数"]?.number ?? 0;
       const setNum = props["セット数"]?.number ?? 0;
