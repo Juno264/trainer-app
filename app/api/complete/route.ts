@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Client } from "@notionhq/client";
+import { supabase } from "../../lib/supabase";
 import Anthropic from "@anthropic-ai/sdk";
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 
-const notion = new Client({ auth: process.env.NOTION_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 type SetRecord = {
@@ -51,68 +49,51 @@ export async function POST(request: NextRequest) {
   const today = 実施日 || new Date().toISOString().split("T")[0];
   const 体調 = records[0]?.体調 ?? "普通";
 
-  // 1. トレーニング記録DBに書き込む
-  for (const record of records) {
-    for (let i = 0; i < record.sets.length; i++) {
-      const set = record.sets[i];
-      const achieved = set.達成 ? "達成" : "未達";
-      try {
-        await notion.pages.create({
-          parent: { database_id: process.env.NOTION_RECORD_DB! },
-          properties: {
-            種目名: { title: [{ text: { content: record.種目名 } }] },
-            実施日: { date: { start: today } },
-            部位: { select: { name: 部位 } },
-            重量kg: { number: set.重量kg },
-            レップ数: { number: set.レップ数 },
-            セット数: { number: i + 1 },
-            目標重量kg: { number: set.目標重量kg },
-            目標レップ数: { number: set.目標レップ数 },
-            達成: { select: { name: achieved } },
-            RPE: { number: record.RPE },
-            体調: { select: { name: record.体調 } },
-            メモ: { rich_text: [{ text: { content: record.メモ || "" } }] },
-          },
-        });
-      } catch (e) {
-        console.error("Failed to write record:", e);
-      }
-    }
-  }
+  // 1. トレーニング記録をSupabaseに書き込む
+  const recordRows = records.flatMap((record) =>
+    record.sets.map((set, i) => ({
+      exercise_name: record.種目名,
+      body_part: 部位,
+      trained_at: today,
+      set_num: i + 1,
+      weight_kg: set.重量kg,
+      reps: set.レップ数,
+      target_weight_kg: set.目標重量kg,
+      target_reps: set.目標レップ数,
+      achieved: set.達成,
+      rpe: record.RPE,
+      condition: record.体調,
+      memo: record.メモ || "",
+    }))
+  );
 
-  // 2. 過去の記録を取得してClaudeに渡す
+  const { error: insertErr } = await supabase
+    .from("training_records")
+    .upsert(recordRows, { onConflict: "exercise_name,trained_at,set_num", ignoreDuplicates: true });
+  if (insertErr) console.error("Failed to insert records:", insertErr);
+
+  // 2. 前回実績を取得してClaudeに渡す
   let historySummary = "";
   try {
-    const histRes = await notion.dataSources.query({
-      data_source_id: process.env.NOTION_RECORD_DS!,
-    });
+    const { data: prevRecords } = await supabase
+      .from("training_records")
+      .select("exercise_name, weight_kg, reps")
+      .lt("trained_at", today)
+      .order("trained_at", { ascending: false });
 
-    // 種目ごとの最高重量×最高レップ数を取得（今日より前の記録のみ）
-    const prevBests: Record<string, { 重量kg: number; レップ数: number }> = {};
-    for (const page of histRes.results) {
-      if (page.object !== "page" || !("properties" in page)) continue;
-      const props = (page as PageObjectResponse).properties as Record<string, {
-        title?: Array<{ plain_text: string }>;
-        number?: number | null;
-        date?: { start: string } | null;
-      }>;
-      const name = props["種目名"]?.title?.[0]?.plain_text ?? "";
-      const date = props["実施日"]?.date?.start ?? "";
-      const weight = props["重量kg"]?.number ?? 0;
-      const reps = props["レップ数"]?.number ?? 0;
-      if (!name || date >= today) continue;
-      if (!prevBests[name] || weight > prevBests[name].重量kg) {
-        prevBests[name] = { 重量kg: weight, レップ数: reps };
+    const prevBests: Record<string, { weight_kg: number; reps: number }> = {};
+    for (const r of prevRecords ?? []) {
+      if (!prevBests[r.exercise_name] || r.weight_kg > prevBests[r.exercise_name].weight_kg) {
+        prevBests[r.exercise_name] = { weight_kg: r.weight_kg, reps: r.reps };
       }
     }
 
     const histLines = records
       .map((r) => {
         const prev = prevBests[r.種目名];
-        if (prev) {
-          return `${r.種目名}: 前回最高 ${prev.重量kg > 0 ? prev.重量kg + "kg" : "自重"}×${prev.レップ数}rep`;
-        }
-        return `${r.種目名}: 初回`;
+        return prev
+          ? `${r.種目名}: 前回最高 ${prev.weight_kg > 0 ? prev.weight_kg + "kg" : "自重"}×${prev.reps}rep`
+          : `${r.種目名}: 初回`;
       })
       .join("\n");
 
@@ -122,13 +103,18 @@ export async function POST(request: NextRequest) {
   }
 
   // 3. Claude APIでレビュー生成
-  const summary = records.map((r) => {
-    const achievedCount = r.sets.filter((s) => s.達成).length;
-    const setDetails = r.sets
-      .map((s, i) => `  Set${i + 1}: ${s.重量kg > 0 ? s.重量kg + "kg" : "自重"}×${s.レップ数}rep (目標:${s.目標重量kg > 0 ? s.目標重量kg + "kg" : "自重"}×${s.目標レップ数}rep, ${s.達成 ? "達成" : "未達"})`)
-      .join("\n");
-    return `【${r.種目名}】\n${setDetails}\n達成: ${achievedCount}/${r.sets.length}セット, RPE: ${r.RPE}`;
-  }).join("\n\n");
+  const summary = records
+    .map((r) => {
+      const achievedCount = r.sets.filter((s) => s.達成).length;
+      const setDetails = r.sets
+        .map(
+          (s, i) =>
+            `  Set${i + 1}: ${s.重量kg > 0 ? s.重量kg + "kg" : "自重"}×${s.レップ数}rep (目標:${s.目標重量kg > 0 ? s.目標重量kg + "kg" : "自重"}×${s.目標レップ数}rep, ${s.達成 ? "達成" : "未達"})`
+        )
+        .join("\n");
+      return `【${r.種目名}】\n${setDetails}\n達成: ${achievedCount}/${r.sets.length}セット, RPE: ${r.RPE}`;
+    })
+    .join("\n\n");
 
   const userPrompt = `以下のトレーニング記録を分析してください。
 部位: ${部位}
@@ -184,73 +170,48 @@ ${summary}${historySummary}
     console.error("Claude error:", e);
   }
 
-  // 4. ClaudeレビューDBに書き込む
-  try {
-    await notion.pages.create({
-      parent: { database_id: process.env.NOTION_REVIEW_DB! },
-      properties: {
-        レビュータイトル: { title: [{ text: { content: `${today} ${部位}` } }] },
-        実施日: { date: { start: today } },
-        部位: { select: { name: 部位 } },
-        総合評価: { select: { name: claudeResult.総合評価 } },
-        達成率: { number: claudeResult.達成率 },
-        前回比: { select: { name: claudeResult.前回比 } },
-        レビュー本文: { rich_text: [{ text: { content: claudeResult.レビュー本文 } }] },
-        次回への指示: { rich_text: [{ text: { content: claudeResult.次回への指示 } }] },
-        次回重量調整メモ: {
-          rich_text: [{
-            text: {
-              content: claudeResult.種目別次回目標
-                .map((e) => `${e.種目名}: ${e.調整理由}`)
-                .join(", "),
-            },
-          }],
-        },
-      },
-    });
-  } catch (e) {
-    console.error("Failed to write review:", e);
-  }
+  // 4. レビューをSupabaseに保存
+  const { error: reviewErr } = await supabase.from("reviews").upsert(
+    {
+      body_part: 部位,
+      trained_at: today,
+      overall_rating: claudeResult.総合評価,
+      achievement_rate: claudeResult.達成率,
+      weight_change: claudeResult.前回比,
+      review_text: claudeResult.レビュー本文,
+      next_instruction: claudeResult.次回への指示,
+      weight_adjustment_memo: claudeResult.種目別次回目標
+        .map((e) => `${e.種目名}: ${e.調整理由}`)
+        .join(", "),
+    },
+    { onConflict: "body_part,trained_at" }
+  );
+  if (reviewErr) console.error("Failed to save review:", reviewErr);
 
   // 5. 種目マスタの目標値を更新
-  for (const target of claudeResult.種目別次回目標) {
-    const exercise = records.find((r) => r.種目名 === target.種目名);
-    if (!exercise?.id) continue;
-    try {
-      await notion.pages.update({
-        page_id: exercise.id,
-        properties: {
-          目標重量kg: { number: target.目標重量kg },
-          目標レップ数: { number: target.目標レップ数 },
-          調整理由: { rich_text: [{ text: { content: target.調整理由 } }] },
-          最終更新日: { date: { start: today } },
-        },
-      });
-    } catch (e) {
-      console.error("Failed to update exercise:", e);
-    }
-  }
+  await Promise.all(
+    claudeResult.種目別次回目標.map(async (target) => {
+      const exercise = records.find((r) => r.種目名 === target.種目名);
+      if (!exercise?.id) return;
+      const { error } = await supabase
+        .from("exercises")
+        .update({
+          target_weight_kg: target.目標重量kg,
+          target_reps: target.目標レップ数,
+          adjustment_reason: target.調整理由,
+          last_updated_at: today,
+        })
+        .eq("id", exercise.id);
+      if (error) console.error("Failed to update exercise:", error);
+    })
+  );
 
   // 6. 部位マスタの最終実施日を更新
-  try {
-    const buiRes = await notion.dataSources.query({
-      data_source_id: process.env.NOTION_BUIMASTER_DS!,
-    });
-    const buiPage = buiRes.results
-      .filter((p): p is PageObjectResponse => p.object === "page" && "properties" in p)
-      .find((page) => {
-        const props = page.properties as Record<string, { title?: Array<{ plain_text: string }> }>;
-        return props["部位名"]?.title?.[0]?.plain_text === 部位;
-      });
-    if (buiPage) {
-      await notion.pages.update({
-        page_id: buiPage.id,
-        properties: { 最終実施日: { date: { start: today } } },
-      });
-    }
-  } catch (e) {
-    console.error("Failed to update 部位マスタ:", e);
-  }
+  const { error: partErr } = await supabase
+    .from("body_parts")
+    .update({ last_trained_at: today })
+    .eq("name", 部位);
+  if (partErr) console.error("Failed to update body_parts:", partErr);
 
   return NextResponse.json({
     総合評価: claudeResult.総合評価,
