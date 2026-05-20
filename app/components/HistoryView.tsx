@@ -115,6 +115,7 @@ export default function HistoryView() {
   const [selectedExercise, setSelectedExercise] = useState("");
   const [statsData, setStatsData] = useState<StatsPoint[]>([]);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [graphMetric, setGraphMetric] = useState<"weight" | "e1rm">("weight");
 
   // カレンダータブ
   const [calendarData, setCalendarData] = useState<Record<string, string[]>>({});
@@ -312,6 +313,7 @@ export default function HistoryView() {
                     setSelectedPart(p);
                     setSelectedExercise("");
                     setStatsData([]);
+                    setGraphMetric("weight");
                   }}
                   className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors ${
                     selectedPart === p ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
@@ -346,21 +348,61 @@ export default function HistoryView() {
             </div>
 
             {/* グラフ */}
-            {selectedExercise && (
-              <div className="bg-zinc-900 rounded-xl p-4">
-                <div className="text-xs text-zinc-500 mb-1">{selectedExercise}</div>
-                <div className="text-sm font-semibold mb-4">
-                  {isBodyweight ? "レップ数推移" : "重量推移"}
-                </div>
-                {loadingStats ? (
-                  <div className="flex items-center justify-center h-48 text-zinc-500 text-sm animate-pulse">
-                    読み込み中...
+            {selectedExercise && (() => {
+              const metric = isBodyweight ? "reps" : graphMetric;
+              const valueOf = (d: StatsPoint) =>
+                metric === "reps" ? d.reps : metric === "e1rm" ? d.e1rm : d.weight_kg;
+              const vals = statsData.map(valueOf).filter((v) => v != null && !isNaN(Number(v)));
+              const current = vals.length ? vals[vals.length - 1] : null;
+              const best = vals.length ? Math.max(...vals) : null;
+              const unit = metric === "reps" ? "rep" : "kg";
+              const fmt = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+              const title = isBodyweight ? "レップ数推移" : graphMetric === "e1rm" ? "推定1RM推移" : "重量推移";
+              return (
+                <div className="bg-zinc-900 rounded-xl p-4">
+                  <div className="text-xs text-zinc-500 mb-1">{selectedExercise}</div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm font-semibold">{title}</div>
+                    {!isBodyweight && (
+                      <div className="flex bg-zinc-800 rounded-lg p-0.5">
+                        {(["weight", "e1rm"] as const).map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => setGraphMetric(m)}
+                            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                              graphMetric === m ? "bg-blue-600 text-white" : "text-zinc-400"
+                            }`}
+                          >
+                            {m === "weight" ? "重量" : "推定1RM"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <StatsChart data={statsData} isBodyweight={isBodyweight} />
-                )}
-              </div>
-            )}
+
+                  {current != null && best != null && (
+                    <div className="flex gap-4 mb-4">
+                      <div>
+                        <div className="text-xs text-zinc-500">現在</div>
+                        <div className="text-lg font-bold text-blue-400">{fmt(current)}<span className="text-xs font-medium ml-0.5">{unit}</span></div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-zinc-500">自己ベスト</div>
+                        <div className="text-lg font-bold">{fmt(best)}<span className="text-xs font-medium ml-0.5">{unit}</span></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {loadingStats ? (
+                    <div className="flex items-center justify-center h-48 text-zinc-500 text-sm animate-pulse">
+                      読み込み中...
+                    </div>
+                  ) : (
+                    <StatsChart data={statsData} metric={metric} />
+                  )}
+                </div>
+              );
+            })()}
 
             {!selectedExercise && (
               <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">

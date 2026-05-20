@@ -3,12 +3,15 @@ import type { StatsPoint } from "../lib/types";
 
 type Props = {
   data: StatsPoint[];
-  isBodyweight: boolean;
+  metric: "weight" | "reps" | "e1rm";
 };
 
-export default function StatsChart({ data, isBodyweight }: Props) {
+export default function StatsChart({ data, metric }: Props) {
+  const valueOf = (d: StatsPoint) =>
+    metric === "reps" ? d.reps : metric === "e1rm" ? d.e1rm : d.weight_kg;
+
   const validData = data.filter((d) => {
-    const v = isBodyweight ? d.reps : d.weight_kg;
+    const v = valueOf(d);
     return v != null && !isNaN(Number(v));
   });
 
@@ -20,8 +23,8 @@ export default function StatsChart({ data, isBodyweight }: Props) {
     );
   }
 
-  const unit = isBodyweight ? "rep" : "kg";
-  const values = validData.map((d) => Number(isBodyweight ? d.reps : d.weight_kg));
+  const unit = metric === "reps" ? "rep" : "kg";
+  const values = validData.map((d) => Number(valueOf(d)));
   const rawMin = Math.min(...values);
   const rawMax = Math.max(...values);
   const pad = rawMax === rawMin ? 1 : (rawMax - rawMin) * 0.15;

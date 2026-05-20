@@ -77,6 +77,7 @@ export type StatsPoint = {
   date: string;
   weight_kg: number;
   reps: number;
+  e1rm: number;
 };
 
 export type WeeklySummary = {
