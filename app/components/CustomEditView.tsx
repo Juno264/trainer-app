@@ -42,7 +42,6 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
 
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOffsetY, setDragOffsetY] = useState(0);
-  const listRef = useRef<HTMLDivElement>(null);
 
   const cancelLongPress = () => {
     if (longPressTimerRef.current) {
@@ -60,11 +59,9 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
   };
 
   useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-
     const onTouchMove = (e: TouchEvent) => {
       const touch = e.touches[0];
+      if (!touch) return;
 
       // 長押し待機中：移動が大きければキャンセル
       if (longPressTimerRef.current && touchInitRef.current) {
@@ -100,13 +97,13 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
 
     const onTouchEnd = () => endDrag();
 
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd);
-    el.addEventListener("touchcancel", onTouchEnd);
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchcancel", onTouchEnd);
     return () => {
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("touchcancel", onTouchEnd);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("touchcancel", onTouchEnd);
     };
   }, []);
   // ─────────────────────────────────────────────────────────────────────────
@@ -195,7 +192,7 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
             {selected.length > 0 && (
               <div>
                 <div className="text-xs text-zinc-500 mb-2">選択中（{selected.length}種目）</div>
-                <div ref={listRef} className="space-y-2">
+                <div className="space-y-2">
                   {selected.map((ex, idx) => {
                     const isDragging = dragIdx === idx;
                     return (
