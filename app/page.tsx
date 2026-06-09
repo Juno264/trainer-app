@@ -8,18 +8,9 @@ import ExerciseManageView from "./components/ExerciseManageView";
 import BottomTabBar, { type AppTab } from "./components/BottomTabBar";
 import HomeTab from "./components/HomeTab";
 import TrainTab from "./components/TrainTab";
+import { makeExerciseState as makeState } from "./lib/session";
 
 type Overlay = "custom" | "training" | "review" | null;
-
-function makeState(plan: ExercisePlan): ExerciseState {
-  return {
-    plan,
-    sets: Array.from({ length: plan.セット数 }, () => ({ 重量kg: "", レップ数: "" })),
-    rpe: 7,
-    memo: "",
-    expanded: false,
-  };
-}
 
 const RATING_COLOR: Record<string, string> = {
   好調: "text-green-400",
@@ -161,15 +152,75 @@ export default function Home() {
             </div>
           </div>
 
+          {/* トレーナーのひとこと */}
           <div className="bg-zinc-900 rounded-xl p-4">
-            <div className="text-xs text-zinc-500 mb-2">Claudeのレビュー</div>
+            <div className="text-xs text-zinc-500 mb-2">トレーナーより</div>
             <div className="text-sm leading-relaxed">{review.レビュー本文}</div>
           </div>
 
-          <div className="bg-blue-950/40 border border-blue-800/40 rounded-xl p-4">
-            <div className="text-xs text-blue-400 mb-2">次回への指示</div>
-            <div className="text-sm leading-relaxed">{review.次回への指示}</div>
-          </div>
+          {/* 良かった点 */}
+          {review.良かった点 && review.良かった点.length > 0 && (
+            <div className="bg-green-950/30 border border-green-800/40 rounded-xl p-4">
+              <div className="text-xs text-green-400 mb-2 font-medium">✅ できていたこと</div>
+              <ul className="space-y-1.5">
+                {review.良かった点.map((p, i) => (
+                  <li key={i} className="text-sm leading-relaxed flex gap-2">
+                    <span className="text-green-400 flex-shrink-0">・</span>
+                    <span>{p}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* メモ反映 */}
+          {review.メモ反映 && review.メモ反映.trim() && (
+            <div className="bg-zinc-900 rounded-xl p-4">
+              <div className="text-xs text-zinc-500 mb-2">📝 メモから読み取ったこと</div>
+              <div className="text-sm leading-relaxed text-zinc-300">{review.メモ反映}</div>
+            </div>
+          )}
+
+          {/* 重点ポイント + 次回アクション */}
+          {(review.重点ポイント || (review.次回アクション && review.次回アクション.length > 0)) && (
+            <div className="bg-blue-950/40 border border-blue-800/40 rounded-xl p-4">
+              {review.重点ポイント && (
+                <>
+                  <div className="text-xs text-blue-400 mb-1 font-medium">🎯 次回の重点</div>
+                  <div className="text-sm font-semibold mb-3">{review.重点ポイント}</div>
+                </>
+              )}
+              {review.次回アクション && review.次回アクション.length > 0 && (
+                <div className="space-y-2.5">
+                  {review.次回アクション.map((a, i) => (
+                    <div key={i} className="flex gap-2.5">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">{i + 1}</div>
+                      <div>
+                        <div className="text-sm font-medium">{a.アクション}</div>
+                        {a.理由 && <div className="text-xs text-blue-200/70 mt-0.5">{a.理由}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 長期トレンド */}
+          {review.長期トレンド && review.長期トレンド.trim() && (
+            <div className="bg-zinc-900 rounded-xl p-4">
+              <div className="text-xs text-zinc-500 mb-2">📈 4週間のトレンド</div>
+              <div className="text-sm leading-relaxed text-zinc-300">{review.長期トレンド}</div>
+            </div>
+          )}
+
+          {/* フォールバック: 構造化レビューが無い場合は従来の次回指示を表示 */}
+          {!review.重点ポイント && review.次回への指示 && (
+            <div className="bg-blue-950/40 border border-blue-800/40 rounded-xl p-4">
+              <div className="text-xs text-blue-400 mb-2">次回への指示</div>
+              <div className="text-sm leading-relaxed">{review.次回への指示}</div>
+            </div>
+          )}
         </div>
 
         <div className="px-4 pt-3 pb-safe-bottom">

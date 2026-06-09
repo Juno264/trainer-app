@@ -12,7 +12,7 @@ export async function GET() {
         .limit(1000),
       supabase
         .from("reviews")
-        .select("body_part, trained_at, overall_rating, achievement_rate, weight_change, review_text, next_instruction")
+        .select("body_part, trained_at, overall_rating, achievement_rate, weight_change, review_text, next_instruction, review_json")
         .order("trained_at", { ascending: false })
         .limit(20),
     ]);
@@ -22,12 +22,18 @@ export async function GET() {
 
     const reviewMap: Record<string, HistoryReview> = {};
     for (const r of reviews ?? []) {
+      const rj = (r.review_json ?? {}) as Partial<HistoryReview>;
       reviewMap[`${r.trained_at}__${r.body_part}`] = {
         総合評価: r.overall_rating as HistoryReview["総合評価"],
         達成率: r.achievement_rate,
         前回比: r.weight_change as HistoryReview["前回比"],
         レビュー本文: r.review_text,
         次回への指示: r.next_instruction,
+        良かった点: rj.良かった点,
+        重点ポイント: rj.重点ポイント,
+        次回アクション: rj.次回アクション,
+        メモ反映: rj.メモ反映,
+        長期トレンド: rj.長期トレンド,
       };
     }
 

@@ -102,6 +102,7 @@ export default function ExerciseManageView() {
         目標重量kg: data.target_weight_kg,
         目標レップ数: data.target_reps,
         セット数: data.default_sets,
+        ウォームアップセット数: data.warmup_sets ?? 0,
         前回セット: [],
       };
       setByPart((prev) => ({

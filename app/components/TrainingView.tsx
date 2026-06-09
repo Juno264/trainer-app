@@ -142,16 +142,19 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
+      // ウォームアップセットは記録・分析の対象外
       const records = exercises.map((ex) => ({
         id: ex.plan.id,
         種目名: ex.plan.種目名,
-        sets: ex.sets.map((s) => ({
-          重量kg: typeof s.重量kg === "number" ? s.重量kg : 0,
-          レップ数: typeof s.レップ数 === "number" ? s.レップ数 : 0,
-          目標重量kg: ex.plan.目標重量kg,
-          目標レップ数: ex.plan.目標レップ数,
-          達成: isAchieved(s, ex.plan),
-        })),
+        sets: ex.sets
+          .filter((s) => !s.ウォームアップ)
+          .map((s) => ({
+            重量kg: typeof s.重量kg === "number" ? s.重量kg : 0,
+            レップ数: typeof s.レップ数 === "number" ? s.レップ数 : 0,
+            目標重量kg: ex.plan.目標重量kg,
+            目標レップ数: ex.plan.目標レップ数,
+            達成: isAchieved(s, ex.plan),
+          })),
         RPE: ex.rpe,
         体調: condition,
         メモ: ex.memo,
@@ -233,15 +236,18 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
       <div ref={contentRef} className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 py-3 space-y-3">
         {exercises.map((ex, exIdx) => {
           const isCardio = ex.plan.部位 === "有酸素（プール）";
-          const allSetsHaveData = ex.sets.every(
+          // ウォームアップは先頭に連続して並ぶ。達成判定・件数は本番セットのみで数える
+          const workingSets = ex.sets.filter((s) => !s.ウォームアップ);
+          const warmupCount = ex.sets.length - workingSets.length;
+          const allSetsHaveData = workingSets.every(
             (s) => s.重量kg !== "" && s.レップ数 !== ""
           );
-          const achievedSets = ex.sets.filter((s) => isAchieved(s, ex.plan)).length;
-          const totalSets = ex.sets.length;
+          const achievedSets = workingSets.filter((s) => isAchieved(s, ex.plan)).length;
+          const totalSets = workingSets.length;
 
           const headerSub = isCardio
-            ? `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "m × " : ""}${ex.plan.目標レップ数}本 × ${ex.sets.length}set`
-            : `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "kg × " : "自重 × "}${ex.plan.目標レップ数}rep × ${ex.sets.length}set`;
+            ? `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "m × " : ""}${ex.plan.目標レップ数}本 × ${ex.plan.セット数}set`
+            : `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "kg × " : "自重 × "}${ex.plan.目標レップ数}rep × ${ex.plan.セット数}set${warmupCount > 0 ? `（+W${warmupCount}）` : ""}`;
 
           return (
             <div key={ex.plan.id} className="bg-zinc-900 rounded-xl overflow-hidden">
@@ -298,8 +304,10 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                       </div>
                     ))}
                     {ex.sets.map((set, setIdx) => {
-                      const achieved = isAchieved(set, ex.plan);
+                      const isWarmup = !!set.ウォームアップ;
+                      const achieved = !isWarmup && isAchieved(set, ex.plan);
                       const hasData = set.重量kg !== "" && set.レップ数 !== "";
+                      const setLabel = isWarmup ? `W${setIdx + 1}` : `${setIdx - warmupCount + 1}`;
                       // 重量コピー元
                       const weightSrc = setIdx === 0
                         ? (ex.plan.前回セット[0]?.重量kg ?? null)
@@ -308,12 +316,19 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                       const repsSrc = setIdx === 0
                         ? (ex.plan.前回セット[0]?.レップ数 ?? null)
                         : (ex.sets[setIdx - 1].レップ数 !== "" ? ex.sets[setIdx - 1].レップ数 : null);
+                      const rowClass = isWarmup
+                        ? "bg-amber-950/25 border border-amber-800/40"
+                        : hasData
+                        ? achieved
+                          ? "bg-green-950/60 border border-green-800"
+                          : "bg-red-950/60 border border-red-800"
+                        : "bg-zinc-800/30";
                       return (
                         <div
                           key={setIdx}
-                          className={`grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center rounded-lg px-2 py-1.5 ${hasData ? (achieved ? "bg-green-950/60 border border-green-800" : "bg-red-950/60 border border-red-800") : "bg-zinc-800/30"}`}
+                          className={`grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center rounded-lg px-2 py-1.5 ${rowClass}`}
                         >
-                          <div className="text-sm font-medium">{setIdx + 1}</div>
+                          <div className={`text-sm font-medium ${isWarmup ? "text-amber-400/80 text-xs" : ""}`}>{setLabel}</div>
                           <input
                             type="number"
                             inputMode="decimal"

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import type { ExercisePlan, ExerciseState } from "../lib/types";
+import { makeExerciseState } from "../lib/session";
 
 type Props = {
   recommendedBodyPart: string;
@@ -12,16 +13,6 @@ type Props = {
 const BODY_PARTS = ["胸・肩・三頭", "背中・二頭", "脚・お尻", "有酸素（プール）"];
 const MAX_PARTS = 3;
 const ITEM_H = 68; // px: approximate height of each selected-item row including gap
-
-function makeExerciseState(plan: ExercisePlan): ExerciseState {
-  return {
-    plan,
-    sets: Array.from({ length: plan.セット数 }, () => ({ 重量kg: "", レップ数: "" })),
-    rpe: 7,
-    memo: "",
-    expanded: false,
-  };
-}
 
 export default function CustomEditView({ recommendedBodyPart, selectedExercises, onStart, onBack }: Props) {
   const [allByPart, setAllByPart] = useState<Record<string, ExercisePlan[]>>({});
