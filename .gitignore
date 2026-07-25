@@ -44,3 +44,10 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# editor
+.vscode/
+
+# このアプリとは無関係なローカル作業用スクリプト
+nba_*.py
+nfl_*.py
