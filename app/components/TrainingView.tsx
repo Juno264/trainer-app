@@ -343,7 +343,9 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                     {/* ヘッダー行 */}
                     <div className="grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 text-xs text-zinc-500 px-1">
                       <div>Set</div>
-                      <div>{isCardio ? "距離(m)" : "重量(kg)"}</div>
+                      <div>
+                        {isCardio ? "距離(m)" : ex.plan.負荷タイプ === "bodyweight" ? "自重±kg" : "重量(kg)"}
+                      </div>
                       <div />
                       <div>{isCardio ? "本数" : "回数"}</div>
                       <div />
@@ -437,6 +439,15 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                       onClick={() => addSet(exIdx)}
                       className="w-full py-2 rounded-lg bg-zinc-800 text-zinc-400 text-sm"
                     >＋ セット追加</button>
+
+                    {/* 自重種目は符号の意味を明示する（アシストを正の数で入れる誤りを防ぐ） */}
+                    {!isCardio && ex.plan.負荷タイプ === "bodyweight" && (
+                      <div className="text-xs text-zinc-600 px-1 leading-relaxed">
+                        自重を基準に <span className="text-zinc-400">±</span> で入力（
+                        <span className="text-zinc-400">-40</span> = アシスト40kg /{" "}
+                        <span className="text-zinc-400">+10</span> = 加重10kg / 空欄 = 自重のみ）
+                      </div>
+                    )}
                   </div>
 
                   {/* RPE */}

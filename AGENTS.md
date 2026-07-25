@@ -74,6 +74,24 @@ type Overlay = "custom" | "training" | "review" | null  ← タブの上に全�
 - hold の除外は `app/lib/session.ts` の `activeExercises()` を使う。
 - 管理画面（`ExerciseManageView`）だけは hold も表示し、区分を変更できる。
 
+### 負荷タイプ（`exercises.load_type`）と重量の符号
+
+| load_type | 実効負荷 | 重量kg の意味 |
+|---|---|---|
+| `external` | 重量kg | バーベル/マシンの重量 |
+| `bodyweight` | 体重 + 重量kg | 負=アシスト（`-40`＝40kgアシスト）／正=加重／0=純自重 |
+
+- **アシストは必ず負で持つ。** 正の数にすると、アシストが減る＝成長したときに
+  グラフが右肩下がりになってしまう。
+- 体重は `app_settings` の `body_weight_kg`（`/api/settings`）。自重種目の
+  推定1RMに必要。**負の重量を `Math.max(0, ...)` で潰さないこと。**
+- 重量の表示・計算は `app/lib/load.ts` に集約（`formatWeight` / `effectiveLoad` /
+  `estimate1RM` / `rawFromEffective`）。UIで直に `重量 > 0 ? ... : "自重"` と書かない。
+- ウォームアップ生成は**実効負荷ベース**で計算する。生の重量に係数を掛けると
+  アシスト種目でアシストが減り、本番より重いウォームアップになる。
+- 2026-06-06以前の自重種目の記録は、アシストを正の数で入れていた時期があり
+  推定1RMが過大に出る。**意図的に修正していない**ので、そういうものとして扱う。
+
 ## 運用上の重要な注意
 
 - **Supabase無料プランは1週間アクセスがないと自動停止する。**
