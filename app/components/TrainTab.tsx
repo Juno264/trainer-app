@@ -1,5 +1,6 @@
 "use client";
 import type { BodyPartInfo, ExercisePlan, ExerciseState } from "../lib/types";
+import { formatWeight } from "../lib/load";
 
 type Props = {
   bodyPartList: BodyPartInfo[];
@@ -164,7 +165,7 @@ export default function TrainTab({
                           )}
                         </div>
                         <div className={`text-xs ml-2 text-right flex-shrink-0 ${isBonus ? "text-zinc-600" : "text-zinc-500"}`}>
-                          {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
+                          {formatWeight(ex.plan.目標重量kg, ex.plan.負荷タイプ)} ×{" "}
                           {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
                         </div>
                       </div>

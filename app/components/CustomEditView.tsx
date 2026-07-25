@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { ExercisePlan, ExerciseState } from "../lib/types";
 import { makeExerciseState, activeExercises } from "../lib/session";
+import { formatWeight } from "../lib/load";
 
 type Props = {
   recommendedBodyPart: string;
@@ -242,7 +243,7 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                             )}
                           </div>
                           <div className="text-xs text-zinc-500">
-                            {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
+                            {formatWeight(ex.plan.目標重量kg, ex.plan.負荷タイプ)} ×{" "}
                             {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
                           </div>
                         </div>
@@ -286,7 +287,7 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                               )}
                             </div>
                             <div className="text-xs text-zinc-500">
-                              {plan.目標重量kg > 0 ? `${plan.目標重量kg}kg × ` : "自重 × "}
+                              {formatWeight(plan.目標重量kg, plan.負荷タイプ)} ×{" "}
                               {plan.目標レップ数}rep × {plan.セット数}set
                             </div>
                           </div>

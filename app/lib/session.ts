@@ -1,4 +1,5 @@
 import type { ExercisePlan, ExerciseState, SetInput } from "./types";
+import { effectiveLoad, rawFromEffective, DEFAULT_BODY_WEIGHT } from "./load";
 
 const round2_5 = (x: number) => Math.round(x / 2.5) * 2.5;
 
@@ -16,14 +17,20 @@ export function activeExercises(plans: ExercisePlan[]): ExercisePlan[] {
  * 充填したウォームアップセットを先頭に追加する（ユーザーは編集可能）。
  * ウォームアップは達成判定・記録保存の対象外（ウォームアップ:true）。
  */
-export function buildSets(plan: ExercisePlan): SetInput[] {
+export function buildSets(plan: ExercisePlan, bodyWeightKg = DEFAULT_BODY_WEIGHT): SetInput[] {
   const n = plan.ウォームアップセット数 ?? 0;
+  const loadType = plan.負荷タイプ ?? "external";
   const warm: SetInput[] = [];
-  if (n > 0 && plan.目標重量kg > 0) {
+
+  // 実効負荷（自重種目は体重±重量）を基準に軽くする。
+  // 生の重量を直接掛けると、アシスト種目（負の重量）でアシストが減り
+  // ウォームアップの方が本番より重くなってしまう。
+  const targetLoad = effectiveLoad(plan.目標重量kg, loadType, bodyWeightKg);
+  if (n > 0 && targetLoad > 0) {
     for (let i = 0; i < n; i++) {
       const pct = n === 1 ? 0.6 : 0.5 + (0.3 * i) / (n - 1); // 50% → 80%
       warm.push({
-        重量kg: round2_5(plan.目標重量kg * pct),
+        重量kg: round2_5(rawFromEffective(targetLoad * pct, loadType, bodyWeightKg)),
         レップ数: Math.max(5, plan.目標レップ数 - 2),
         ウォームアップ: true,
       });
@@ -36,10 +43,13 @@ export function buildSets(plan: ExercisePlan): SetInput[] {
   return [...warm, ...work];
 }
 
-export function makeExerciseState(plan: ExercisePlan): ExerciseState {
+export function makeExerciseState(
+  plan: ExercisePlan,
+  bodyWeightKg = DEFAULT_BODY_WEIGHT
+): ExerciseState {
   return {
     plan,
-    sets: buildSets(plan),
+    sets: buildSets(plan, bodyWeightKg),
     rpe: 7,
     memo: "",
     expanded: false,

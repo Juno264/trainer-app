@@ -1,8 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
-import type { ExercisePlan, Tier } from "../lib/types";
+import type { ExercisePlan, Tier, LoadType } from "../lib/types";
+import { formatWeight, DEFAULT_BODY_WEIGHT } from "../lib/load";
 
 const BODY_PARTS = ["胸・肩・三頭", "背中・二頭", "脚・お尻"];
+
+const LOAD_TYPES: { value: LoadType; label: string; hint: string }[] = [
+  { value: "external", label: "外部負荷", hint: "バーベル・マシン。重量がそのまま負荷" },
+  { value: "bodyweight", label: "自重ベース", hint: "負の値でアシスト（-40＝40kgアシスト）" },
+];
 
 const TIERS: { value: Tier; label: string; hint: string }[] = [
   { value: "core", label: "必須", hint: "達成率の分母に含む" },
@@ -28,6 +34,8 @@ export default function ExerciseManageView() {
   const [newSets, setNewSets] = useState(3);
   const [newWeight, setNewWeight] = useState(0);
   const [newReps, setNewReps] = useState(10);
+  const [bodyWeight, setBodyWeight] = useState<number>(DEFAULT_BODY_WEIGHT);
+  const [savingWeight, setSavingWeight] = useState(false);
 
   useEffect(() => {
     fetch("/api/exercises")
@@ -36,6 +44,13 @@ export default function ExerciseManageView() {
         if (!data.error) setByPart(data);
       })
       .finally(() => setLoading(false));
+
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.error && data.体重kg) setBodyWeight(data.体重kg);
+      })
+      .catch(() => {});
   }, []);
 
   const exercises = byPart[selectedPart] ?? [];
@@ -94,6 +109,35 @@ export default function ExerciseManageView() {
     }
   };
 
+  // 負荷タイプ（外部負荷 / 自重ベース）を切り替える
+  const changeLoadType = async (id: string, loadType: LoadType) => {
+    const prevState = byPart[selectedPart];
+    setByPart((prev) => ({
+      ...prev,
+      [selectedPart]: prev[selectedPart].map((ex) => (ex.id === id ? { ...ex, 負荷タイプ: loadType } : ex)),
+    }));
+    const res = await fetch(`/api/exercises/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ load_type: loadType }),
+    });
+    if (!res.ok) {
+      setByPart((prev) => ({ ...prev, [selectedPart]: prevState }));
+      alert("負荷タイプの変更に失敗しました");
+    }
+  };
+
+  const saveBodyWeight = async () => {
+    setSavingWeight(true);
+    const res = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 体重kg: bodyWeight }),
+    });
+    if (!res.ok) alert("体重の保存に失敗しました");
+    setSavingWeight(false);
+  };
+
   const deleteExercise = async (id: string, name: string) => {
     if (!confirm(`「${name}」を削除しますか？\n過去の記録は残ります。`)) return;
     const res = await fetch(`/api/exercises/${id}`, { method: "DELETE" });
@@ -130,6 +174,7 @@ export default function ExerciseManageView() {
         セット数: data.default_sets,
         ウォームアップセット数: data.warmup_sets ?? 0,
         tier: (data.tier ?? "core") as Tier,
+        負荷タイプ: (data.load_type ?? "external") as LoadType,
         前回セット: [],
       };
       setByPart((prev) => ({
@@ -176,6 +221,34 @@ export default function ExerciseManageView() {
       <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 pt-3 pb-8 space-y-2">
         {loading && <div className="text-zinc-500 text-sm text-center py-8 animate-pulse">読み込み中...</div>}
 
+        {/* 体重 — 自重種目の実効負荷（＝推定1RM）計算に使う */}
+        <div className="bg-zinc-900 rounded-xl px-4 py-3">
+          <div className="text-xs text-zinc-500 mb-1.5">体重</div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              autoComplete="off"
+              value={bodyWeight}
+              onChange={(e) => setBodyWeight(Number(e.target.value))}
+              className="flex-1 bg-zinc-800 rounded-lg px-3 py-2 text-sm text-center"
+              min={1}
+              max={300}
+            />
+            <span className="text-sm text-zinc-500">kg</span>
+            <button
+              onClick={saveBodyWeight}
+              disabled={savingWeight}
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 active:bg-blue-700 disabled:opacity-50"
+            >
+              {savingWeight ? "保存中..." : "保存"}
+            </button>
+          </div>
+          <div className="text-xs text-zinc-600 mt-1.5">
+            懸垂・ディップスなど自重種目の推定1RM（体重±重量）の計算に使います
+          </div>
+        </div>
+
         {exercises.map((ex) => (
           <div
             key={ex.id}
@@ -197,7 +270,7 @@ export default function ExerciseManageView() {
                   )}
                 </div>
                 <div className={`text-xs mt-0.5 ${ex.tier === "hold" ? "text-zinc-600" : "text-zinc-500"}`}>
-                  {ex.目標重量kg > 0 ? `${ex.目標重量kg}kg` : "自重"} × {ex.目標レップ数}rep × {ex.セット数}set
+                  {formatWeight(ex.目標重量kg, ex.負荷タイプ)} × {ex.目標レップ数}rep × {ex.セット数}set
                 </div>
               </div>
               <div className="flex gap-2">
@@ -236,6 +309,27 @@ export default function ExerciseManageView() {
                   </div>
                   <div className="text-xs text-zinc-600 mt-1">
                     {TIERS.find((t) => t.value === ex.tier)?.hint}
+                  </div>
+                </div>
+
+                {/* 負荷タイプ — 自重ベースにすると負の重量＝アシストとして扱える */}
+                <div>
+                  <div className="text-xs text-zinc-500 mb-1.5">負荷タイプ</div>
+                  <div className="flex gap-1.5">
+                    {LOAD_TYPES.map((lt) => (
+                      <button
+                        key={lt.value}
+                        onClick={() => changeLoadType(ex.id, lt.value)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                          ex.負荷タイプ === lt.value ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
+                        }`}
+                      >
+                        {lt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-xs text-zinc-600 mt-1">
+                    {LOAD_TYPES.find((lt) => lt.value === ex.負荷タイプ)?.hint}
                   </div>
                 </div>
 

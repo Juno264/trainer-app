@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import type { ExerciseState, Condition, ReviewResult } from "../lib/types";
+import { formatWeight, formatWeightShort } from "../lib/load";
 
 type Props = {
   bodyPart: string;
@@ -294,7 +295,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
 
           const headerSub = isCardio
             ? `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "m × " : ""}${ex.plan.目標レップ数}本 × ${ex.plan.セット数}set`
-            : `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "kg × " : "自重 × "}${ex.plan.目標レップ数}rep × ${ex.plan.セット数}set${warmupCount > 0 ? `（+W${warmupCount}）` : ""}`;
+            : `${formatWeight(ex.plan.目標重量kg, ex.plan.負荷タイプ)} × ${ex.plan.目標レップ数}rep × ${ex.plan.セット数}set${warmupCount > 0 ? `（+W${warmupCount}）` : ""}`;
 
           return (
             <div key={ex.plan.id}>
@@ -351,7 +352,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                     {/* 目標行 */}
                     <div className="grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center text-xs text-zinc-500 bg-zinc-800/50 rounded-lg px-2 py-1.5">
                       <div>目標</div>
-                      <div className="text-center">{isCardio ? (ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}m` : "-") : (ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg : "自重")}</div>
+                      <div className="text-center">{isCardio ? (ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}m` : "-") : formatWeightShort(ex.plan.目標重量kg, ex.plan.負荷タイプ)}</div>
                       <div />
                       <div className="text-center">{ex.plan.目標レップ数}{isCardio ? "本" : ""}</div>
                       <div />
@@ -361,7 +362,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                     {ex.plan.前回セット.map((ps, pi) => (
                       <div key={pi} className="grid grid-cols-[2rem_1fr_1.5rem_1fr_1.5rem_2rem] gap-1.5 items-center text-xs text-blue-400/70 px-2 py-0.5">
                         <div className="text-blue-400/50">{pi === 0 ? "前回" : ""}</div>
-                        <div className="text-center">{isCardio ? (ps.重量kg > 0 ? `${ps.重量kg}m` : "-") : (ps.重量kg > 0 ? `${ps.重量kg}` : "自重")}</div>
+                        <div className="text-center">{isCardio ? (ps.重量kg > 0 ? `${ps.重量kg}m` : "-") : formatWeightShort(ps.重量kg, ex.plan.負荷タイプ)}</div>
                         <div />
                         <div className="text-center">{ps.レップ数}{isCardio ? "本" : "rep"}</div>
                         <div />
@@ -401,7 +402,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                             value={set.重量kg}
                             onChange={(e) => updateSet(exIdx, setIdx, "重量kg", e.target.value)}
                             onFocus={() => { if (!timerRunning && setIdx > 0) { setTimerLeft(timerPreset); setTimerRunning(true); } }}
-                            placeholder={ex.plan.目標重量kg > 0 ? String(ex.plan.目標重量kg) : "0"}
+                            placeholder={ex.plan.目標重量kg !== 0 ? String(ex.plan.目標重量kg) : "0"}
                             className="bg-zinc-700 rounded-md px-1 py-2 text-sm w-full text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
                           {weightSrc !== null ? (

@@ -8,7 +8,8 @@ import ExerciseManageView from "./components/ExerciseManageView";
 import BottomTabBar, { type AppTab } from "./components/BottomTabBar";
 import HomeTab from "./components/HomeTab";
 import TrainTab from "./components/TrainTab";
-import { makeExerciseState as makeState, activeExercises } from "./lib/session";
+import { makeExerciseState, activeExercises } from "./lib/session";
+import { DEFAULT_BODY_WEIGHT } from "./lib/load";
 
 type Overlay = "custom" | "training" | "review" | null;
 
@@ -36,6 +37,10 @@ export default function Home() {
   const [condition, setCondition] = useState<Condition>("普通");
   const [review, setReview] = useState<ReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 自重種目のウォームアップ生成に使う（実効負荷＝体重±重量）
+  const [bodyWeight, setBodyWeight] = useState<number>(DEFAULT_BODY_WEIGHT);
+
+  const makeState = (plan: ExercisePlan) => makeExerciseState(plan, bodyWeight);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -43,9 +48,10 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const [recRes, exRes] = await Promise.all([
+      const [recRes, exRes, setRes] = await Promise.all([
         fetch("/api/recommend"),
         fetch("/api/exercises"),
+        fetch("/api/settings"),
       ]);
       if (!recRes.ok) {
         const d = await recRes.json();
@@ -53,15 +59,21 @@ export default function Home() {
       }
       const recData: RecommendData = await recRes.json();
       const exData: Record<string, ExercisePlan[]> = exRes.ok ? await exRes.json() : {};
+      const setData = setRes.ok ? await setRes.json() : null;
+      const bw = setData?.体重kg ?? DEFAULT_BODY_WEIGHT;
 
       setBodyPartList(recData.部位リスト);
       setAllExercisesByPart(exData);
+      setBodyWeight(bw);
 
       const recommended = recData.部位リスト.find((bp) => bp.おすすめ) ?? recData.部位リスト[0];
       if (recommended) {
         setSelectedBodyPart(recommended.名前);
-        // 保留中(hold)の種目はトレーニング対象に含めない
-        setExercises(activeExercises(exData[recommended.名前] ?? []).map(makeState));
+        // 保留中(hold)の種目はトレーニング対象に含めない。
+        // 体調stateの反映を待たずに済むよう、取得した体重を直接渡す
+        setExercises(
+          activeExercises(exData[recommended.名前] ?? []).map((p) => makeExerciseState(p, bw))
+        );
       }
     } catch (e) {
       setError(String(e));

@@ -12,7 +12,7 @@ export async function PATCH(
     // 更新可能な列を明示する（任意の列を書き換えられないようにするため）
     const ALLOWED = [
       "name", "body_part", "target_weight_kg", "target_reps",
-      "default_sets", "warmup_sets", "tier", "sort_order",
+      "default_sets", "warmup_sets", "tier", "load_type", "sort_order",
     ] as const;
     const patch: Record<string, unknown> = {};
     for (const key of ALLOWED) {
@@ -21,6 +21,9 @@ export async function PATCH(
 
     if (body.tier !== undefined && !["core", "bonus", "hold"].includes(body.tier)) {
       return NextResponse.json({ error: "tier は core / bonus / hold のいずれかです" }, { status: 400 });
+    }
+    if (body.load_type !== undefined && !["external", "bodyweight"].includes(body.load_type)) {
+      return NextResponse.json({ error: "load_type は external / bodyweight のいずれかです" }, { status: 400 });
     }
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "更新対象の項目がありません" }, { status: 400 });

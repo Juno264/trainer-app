@@ -26,6 +26,13 @@ export type PrevSet = {
  */
 export type Tier = "core" | "bonus" | "hold";
 
+/**
+ * 負荷のかかり方。重量kgの意味がこれで変わる。
+ * external   … バーベル/マシン。実効負荷 = 重量
+ * bodyweight … 自重ベース。実効負荷 = 体重 + 重量（負ならアシスト）
+ */
+export type LoadType = "external" | "bodyweight";
+
 export type ExercisePlan = {
   id: string;
   種目名: string;
@@ -35,6 +42,7 @@ export type ExercisePlan = {
   セット数: number;
   ウォームアップセット数: number;
   tier: Tier;
+  負荷タイプ: LoadType;
   前回セット: PrevSet[];
 };
 
@@ -109,7 +117,12 @@ export type StatsPoint = {
   date: string;
   weight_kg: number;
   reps: number;
+  /** 実効負荷（自重種目は体重を加味した値）ベースの推定1RM */
   e1rm: number;
+};
+
+export type AppSettings = {
+  体重kg: number;
 };
 
 export type WeeklySummary = {

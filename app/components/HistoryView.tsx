@@ -2,9 +2,16 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import type { HistorySession, ExercisePlan, StatsPoint, WeeklySummary } from "../lib/types";
+import { formatWeight } from "../lib/load";
 
 const StatsChart = dynamic(() => import("./StatsChart"), { ssr: false });
 
+/**
+ * 履歴の記録は種目マスタと結合していないため負荷タイプを持たない。
+ * 負の重量はアシスト以外にありえないので、符号だけで判定する。
+ */
+const fmtHistoryWeight = (w: number) =>
+  w < 0 ? `アシスト${Math.abs(w)}kg` : w > 0 ? `${w}kg` : "自重";
 
 type Tab = "記録" | "グラフ" | "カレンダー";
 
@@ -155,7 +162,11 @@ export default function HistoryView() {
 
   const exercises = byPart[selectedPart] ?? [];
   const selectedPlanForGraph = exercises.find((e) => e.種目名 === selectedExercise);
-  const isBodyweight = selectedPlanForGraph ? selectedPlanForGraph.目標重量kg === 0 : false;
+  // 自重ベースでも体重を加味した推定1RMを出せるようになったため、
+  // 「レップ数しか見られない種目」は純自重（アシストも加重もない）に限る
+  const isBodyweight = selectedPlanForGraph
+    ? selectedPlanForGraph.負荷タイプ === "bodyweight" && selectedPlanForGraph.目標重量kg === 0
+    : false;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-black text-white">
@@ -278,7 +289,7 @@ export default function HistoryView() {
                               className={`grid grid-cols-[2rem_1fr_1fr] gap-2 items-center rounded-lg px-2 py-1.5 text-sm ${set.達成 ? "bg-green-950/40 border border-green-800/50" : "bg-zinc-800/40"}`}
                             >
                               <div className="text-zinc-500">{si + 1}</div>
-                              <div>{set.重量kg > 0 ? `${set.重量kg}kg` : "自重"}</div>
+                              <div>{fmtHistoryWeight(set.重量kg)}</div>
                               <div>{set.レップ数}rep</div>
                             </div>
                           ))}
@@ -341,7 +352,7 @@ export default function HistoryView() {
                 >
                   {ex.種目名}
                   <span className="text-xs text-zinc-500 ml-2">
-                    {ex.目標重量kg > 0 ? `目標 ${ex.目標重量kg}kg` : "自重"}
+                    目標 {formatWeight(ex.目標重量kg, ex.負荷タイプ)}
                   </span>
                 </button>
               ))}

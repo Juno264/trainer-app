@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "../../lib/supabase";
+import { effectiveLoad, formatWeight, DEFAULT_BODY_WEIGHT } from "../../lib/load";
+import type { LoadType } from "../../lib/types";
 import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -52,7 +54,9 @@ type ClaudeReview = {
   種目別次回目標: ClaudeTarget[];
 };
 
-const fmtW = (w: number) => (w > 0 ? `${w}kg` : "自重");
+/** 種目の負荷タイプを考慮した重量表記。アシストは「アシスト40kg」と出す */
+const makeFmtW = (loadTypeOf: (name: string) => LoadType) =>
+  (w: number, exerciseName: string) => formatWeight(w, loadTypeOf(exerciseName));
 
 export async function POST(request: NextRequest) {
   const body: CompleteBody = await request.json();
@@ -62,14 +66,23 @@ export async function POST(request: NextRequest) {
 
   // ── 0. 種目マスタ（tier / 予定セット数）を取得 ──────────────────────────
   // tier はAI側が状況に応じて更新するため、必ずDBから読む（ハードコード禁止）
-  const { data: exMeta, error: exMetaErr } = await supabase
-    .from("exercises")
-    .select("name, tier, default_sets")
-    .eq("body_part", 部位);
+  const [{ data: exMeta, error: exMetaErr }, { data: bwSetting }] = await Promise.all([
+    supabase
+      .from("exercises")
+      .select("name, tier, default_sets, load_type")
+      .eq("body_part", 部位),
+    supabase.from("app_settings").select("value").eq("key", "body_weight_kg").maybeSingle(),
+  ]);
   if (exMetaErr) {
     // ここで落ちると達成率が0%になってしまうため、原因が追えるよう明示的に記録する
     console.error("Failed to fetch exercise meta (tier/default_sets):", exMetaErr);
   }
+  const parsedBw = Number(bwSetting?.value);
+  const bodyWeight = Number.isFinite(parsedBw) && parsedBw > 0 ? parsedBw : DEFAULT_BODY_WEIGHT;
+
+  const loadTypeOf = (name: string): LoadType =>
+    ((exMeta ?? []).find((e) => e.name === name)?.load_type ?? "external") as LoadType;
+  const fmtW = makeFmtW(loadTypeOf);
 
   const tierOf = (name: string): Tier =>
     ((exMeta ?? []).find((e) => e.name === name)?.tier ?? "core") as Tier;
@@ -187,7 +200,7 @@ export async function POST(request: NextRequest) {
       });
       ex.total += 1;
       if (r.achieved) ex.achieved += 1;
-      const cur = `${fmtW(r.weight_kg)}×${r.reps}`;
+      const cur = `${fmtW(r.weight_kg, r.exercise_name)}×${r.reps}`;
       if (!ex.best) ex.best = cur;
     }
 
@@ -224,13 +237,13 @@ export async function POST(request: NextRequest) {
     }
     const setDetails = r.sets
       .map((s, i) => {
-        totalVolume += (s.重量kg > 0 ? s.重量kg : 1) * s.レップ数;
-        return `  Set${i + 1}: ${fmtW(s.重量kg)}×${s.レップ数}rep (目標${fmtW(s.目標重量kg)}×${s.目標レップ数}rep, ${s.達成 ? "達成" : "未達"})`;
+        totalVolume += effectiveLoad(s.重量kg, loadTypeOf(r.種目名), bodyWeight) * s.レップ数;
+        return `  Set${i + 1}: ${fmtW(s.重量kg, r.種目名)}×${s.レップ数}rep (目標${fmtW(s.目標重量kg, r.種目名)}×${s.目標レップ数}rep, ${s.達成 ? "達成" : "未達"})`;
       })
       .join("\n");
     const achievedCount = r.sets.filter((s) => s.達成).length;
     const prev = prevBests[r.種目名];
-    const prevLine = prev ? ` / 自己ベスト${fmtW(prev.weight_kg)}×${prev.reps}` : " / 初回種目";
+    const prevLine = prev ? ` / 自己ベスト${fmtW(prev.weight_kg, r.種目名)}×${prev.reps}` : " / 初回種目";
     const memoLine = r.メモ?.trim() ? `\n  メモ: 「${r.メモ.trim()}」` : "";
     return `【${order + 1}種目目: ${r.種目名}】[${TIER_LABEL[tier]}]${prevLine}\n${setDetails}\n  達成 ${achievedCount}/${r.sets.length}セット, RPE${r.RPE}${memoLine}`;
   });
@@ -263,7 +276,12 @@ ${sessionLines.join("\n\n")}${達成率文脈}${履歴文脈}${直近レビュ�
 - 全セット達成 & RPE8〜9 → 維持（フォーム定着フェーズ）
 - 後半種目での未達や疲労明らか → 維持（疲労が原因なら重量は据え置く）
 - 3週連続で未達が続く種目 → 目標を1段階下げる（高すぎる）
-- 自重種目(目標重量0kg)は目標重量kgを0のまま。レップ数は1未満にしない。
+- **自重ベースの種目（懸垂・ディップスなど）の重量の読み方**：
+  「アシストNkg」＝ 補助を N kg 受けている状態で、目標重量kg には **負の数**（-N）が入る。
+  アシストが減る（-40 → -30）ほど自分の力で挙げていることになり、これが**進歩**。
+  したがって強くなったらアシストを減らす方向（負の数を0に近づける）に調整すること。
+  「自重+Nkg」は加重で、こちらは正の数。レップ数は1未満にしない。
+  現在の体重は ${bodyWeight}kg。実効負荷は 体重＋目標重量kg で計算している。
 - **「未実施（記録なし）」の種目は目標値を絶対に変更しない。** 実施していない以上、
   重量を上下させる根拠が存在しないため。この種目は「種目別次回目標」から除外すること。
 
@@ -373,9 +391,11 @@ ${sessionLines.join("\n\n")}${達成率文脈}${履歴文脈}${直近レビュ�
       if (!adjustable.has(target.種目名)) return;
       const exercise = records.find((r) => r.種目名 === target.種目名);
       if (!exercise?.id) return;
-      const isBodyweight = (exercise.sets[0]?.目標重量kg ?? 0) === 0;
+      // 自重種目は重量が負（アシスト）になりうるので 0 で切り上げてはいけない。
+      // レップ数だけは1未満にしない（過去に -2 に壊れた事故があるため）。
+      const isBodyweight = loadTypeOf(target.種目名) === "bodyweight";
       const safeReps = isBodyweight ? Math.max(1, target.目標レップ数) : target.目標レップ数;
-      const safeWeight = isBodyweight ? 0 : Math.max(0, target.目標重量kg);
+      const safeWeight = isBodyweight ? target.目標重量kg : Math.max(0, target.目標重量kg);
       const { error } = await supabase
         .from("exercises")
         .update({
