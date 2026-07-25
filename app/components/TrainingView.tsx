@@ -22,6 +22,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
   const [timerLeft, setTimerLeft] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showIncompleteConfirm, setShowIncompleteConfirm] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -139,15 +140,27 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+  // 実施した＝ウォームアップ以外に1つでも入力のあるセットがある
+  const hasAnyInput = (ex: ExerciseState) =>
+    ex.sets.some((s) => !s.ウォームアップ && (s.重量kg !== "" || s.レップ数 !== ""));
+
+  // 未記録の必須種目。任意(bonus)は未実施でも警告しない
+  const unrecordedCore = exercises.filter(
+    (ex) => ex.plan.tier === "core" && !hasAnyInput(ex)
+  );
+
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      // ウォームアップセットは記録・分析の対象外
+      // ウォームアップセットは記録・分析の対象外。
+      // 両方未入力のセット行は「実施しなかった」ものとして送らない
+      // （送ると0kg×0repの記録が残り、前回値や統計を汚すため）。
       const records = exercises.map((ex) => ({
         id: ex.plan.id,
         種目名: ex.plan.種目名,
         sets: ex.sets
           .filter((s) => !s.ウォームアップ)
+          .filter((s) => s.重量kg !== "" || s.レップ数 !== "")
           .map((s) => ({
             重量kg: typeof s.重量kg === "number" ? s.重量kg : 0,
             レップ数: typeof s.レップ数 === "number" ? s.レップ数 : 0,
@@ -181,6 +194,37 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
 
   return (
     <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
+      {/* 必須種目に未記録があるときの確認（任意種目では出さない） */}
+      {showIncompleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/70" onClick={() => setShowIncompleteConfirm(false)}>
+          <div className="w-full bg-zinc-900 rounded-t-2xl px-4 pt-5 pb-safe-bottom" onClick={(e) => e.stopPropagation()}>
+            <div className="text-sm font-semibold text-zinc-300 mb-1">必須種目に未記録があります</div>
+            <div className="text-xs text-zinc-500 mb-3">
+              このまま完了すると、以下は未達として達成率に反映されます
+            </div>
+            <div className="bg-zinc-800/60 rounded-xl px-3 py-2 mb-4 space-y-1">
+              {unrecordedCore.map((ex) => (
+                <div key={ex.plan.id} className="text-xs text-zinc-300">・{ex.plan.種目名}</div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => { setShowIncompleteConfirm(false); handleSubmit(); }}
+                className="w-full py-3.5 rounded-xl text-sm font-semibold bg-blue-600 active:bg-blue-700"
+              >
+                このまま完了する
+              </button>
+              <button
+                onClick={() => setShowIncompleteConfirm(false)}
+                className="w-full py-3.5 rounded-xl text-sm text-zinc-400 active:bg-zinc-800"
+              >
+                戻って入力する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 戻る確認モーダル */}
       {showBackMenu && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/70" onClick={() => setShowBackMenu(false)}>
@@ -236,6 +280,9 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
       <div ref={contentRef} className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 py-3 space-y-3">
         {exercises.map((ex, exIdx) => {
           const isCardio = ex.plan.部位 === "有酸素（プール）";
+          const isBonus = ex.plan.tier === "bonus";
+          // 必須→任意の切り替わり位置に見出しを挿入する
+          const showBonusHeading = isBonus && exercises[exIdx - 1]?.plan.tier !== "bonus";
           // ウォームアップは先頭に連続して並ぶ。達成判定・件数は本番セットのみで数える
           const workingSets = ex.sets.filter((s) => !s.ウォームアップ);
           const warmupCount = ex.sets.length - workingSets.length;
@@ -250,25 +297,43 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
             : `${ex.plan.目標重量kg > 0 ? ex.plan.目標重量kg + "kg × " : "自重 × "}${ex.plan.目標レップ数}rep × ${ex.plan.セット数}set${warmupCount > 0 ? `（+W${warmupCount}）` : ""}`;
 
           return (
-            <div key={ex.plan.id} className="bg-zinc-900 rounded-xl overflow-hidden">
-              {/* カードヘッダー（タップで展開） */}
-              <button
-                onClick={() => toggleExpand(exIdx)}
-                className="w-full px-4 py-3 flex items-center justify-between text-left"
-              >
-                <div>
-                  <div className="font-semibold">{ex.plan.種目名}</div>
-                  <div className="text-xs text-zinc-400 mt-0.5">
-                    {headerSub}
-                    {allSetsHaveData && (
-                      <span className={`ml-2 ${achievedSets === totalSets ? "text-green-400" : achievedSets > 0 ? "text-yellow-400" : "text-red-400"}`}>
-                        ({achievedSets}/{totalSets}達成)
-                      </span>
-                    )}
-                  </div>
+            <div key={ex.plan.id}>
+              {showBonusHeading && (
+                <div className="pt-4 pb-2 border-t border-zinc-800 mt-1">
+                  <div className="text-xs font-medium text-zinc-400">ボーナス</div>
+                  <div className="text-xs text-zinc-600 mt-0.5">余力があれば。達成率には影響しません</div>
                 </div>
-                <span className="text-zinc-500 text-lg">{ex.expanded ? "▲" : "▼"}</span>
-              </button>
+              )}
+              <div
+                className={`rounded-xl overflow-hidden ${
+                  isBonus ? "bg-zinc-900/50 border border-dashed border-zinc-700" : "bg-zinc-900"
+                }`}
+              >
+                {/* カードヘッダー（タップで展開） */}
+                <button
+                  onClick={() => toggleExpand(exIdx)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-left"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-semibold ${isBonus ? "text-zinc-400" : ""}`}>{ex.plan.種目名}</span>
+                      {isBonus && (
+                        <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">
+                          任意
+                        </span>
+                      )}
+                    </div>
+                    <div className={`text-xs mt-0.5 ${isBonus ? "text-zinc-600" : "text-zinc-400"}`}>
+                      {headerSub}
+                      {allSetsHaveData && (
+                        <span className={`ml-2 ${achievedSets === totalSets ? "text-green-400" : achievedSets > 0 ? "text-yellow-400" : "text-red-400"}`}>
+                          ({achievedSets}/{totalSets}達成)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-lg">{ex.expanded ? "▲" : "▼"}</span>
+                </button>
 
               {ex.expanded && (
                 <div className="px-4 pb-4 space-y-3">
@@ -402,6 +467,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                   </div>
                 </div>
               )}
+              </div>
             </div>
           );
         })}
@@ -433,7 +499,10 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
 
         {/* 完了ボタン */}
         <button
-          onClick={handleSubmit}
+          onClick={() => {
+            if (unrecordedCore.length > 0) setShowIncompleteConfirm(true);
+            else handleSubmit();
+          }}
           disabled={submitting}
           className="w-full py-4 rounded-xl text-base font-bold bg-blue-600 active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >

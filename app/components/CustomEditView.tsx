@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import type { ExercisePlan, ExerciseState } from "../lib/types";
-import { makeExerciseState } from "../lib/session";
+import { makeExerciseState, activeExercises } from "../lib/session";
 
 type Props = {
   recommendedBodyPart: string;
@@ -235,7 +235,12 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm">{ex.plan.種目名}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm truncate">{ex.plan.種目名}</span>
+                            {ex.plan.tier === "bonus" && (
+                              <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">任意</span>
+                            )}
+                          </div>
                           <div className="text-xs text-zinc-500">
                             {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
                             {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
@@ -257,7 +262,8 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
             <div>
               <div className="text-xs text-zinc-500 mb-2">追加する</div>
               {selectedParts.map((part) => {
-                const unselected = (allByPart[part] ?? []).filter((ex) => !isIncluded(ex.id));
+                // 保留中(hold)の種目は追加候補に出さない
+                const unselected = activeExercises(allByPart[part] ?? []).filter((ex) => !isIncluded(ex.id));
                 if (unselected.length === 0) return null;
                 return (
                   <div key={part} className="mb-4">
@@ -273,7 +279,12 @@ export default function CustomEditView({ recommendedBodyPart, selectedExercises,
                         >
                           <div className="w-8 h-8 rounded-full bg-blue-900/50 text-blue-400 flex items-center justify-center text-lg flex-shrink-0">＋</div>
                           <div>
-                            <div className="font-medium text-sm">{plan.種目名}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{plan.種目名}</span>
+                              {plan.tier === "bonus" && (
+                                <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none">任意</span>
+                              )}
+                            </div>
                             <div className="text-xs text-zinc-500">
                               {plan.目標重量kg > 0 ? `${plan.目標重量kg}kg × ` : "自重 × "}
                               {plan.目標レップ数}rep × {plan.セット数}set

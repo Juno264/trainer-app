@@ -17,6 +17,15 @@ export type PrevSet = {
   レップ数: number;
 };
 
+/**
+ * 種目の区分。DBの exercises.tier に対応する。
+ * core  … 必須種目。達成率の分母に含む
+ * bonus … 任意種目。分母にも分子にも含めず、加点として別カウント
+ * hold  … 保留中。トレーニング画面に出さず、集計対象外
+ * 状況に応じてAI側が更新するため、ハードコードせず必ずDBから読むこと。
+ */
+export type Tier = "core" | "bonus" | "hold";
+
 export type ExercisePlan = {
   id: string;
   種目名: string;
@@ -25,6 +34,7 @@ export type ExercisePlan = {
   目標レップ数: number;
   セット数: number;
   ウォームアップセット数: number;
+  tier: Tier;
   前回セット: PrevSet[];
 };
 
@@ -51,12 +61,21 @@ export type NextAction = {
   理由: string;
 };
 
+/** 達成率の内訳。core のみで算出し、bonus は加点として別掲する */
+export type AchievementBreakdown = {
+  core_rate: number;
+  core_done: number;
+  core_planned: number;
+  bonus_done: number;
+};
+
 export type ReviewResult = {
   総合評価: Rating;
   達成率: number;
   前回比: WeightChange;
   レビュー本文: string;
   次回への指示: string;
+  achievement?: AchievementBreakdown;
   // ── 構造化レビュー（トレーナー視点AI分析）──
   良かった点?: string[];
   重点ポイント?: string;

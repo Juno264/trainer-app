@@ -127,17 +127,50 @@ export default function TrainTab({
                   {selectedInfo.経過日数}日ぶりです。最初のセットは軽めで感触を確認しましょう。
                 </div>
               )}
-              <div className="text-xs text-zinc-500 mb-2">今日の種目（{exercises.length}種目）</div>
-              <div className="space-y-2">
-                {exercises.map((ex) => (
-                  <div key={ex.plan.id} className="bg-zinc-900 rounded-xl px-4 py-3 flex items-center justify-between">
-                    <div className="font-medium text-sm">{ex.plan.種目名}</div>
-                    <div className="text-xs text-zinc-500 ml-2 text-right flex-shrink-0">
-                      {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
-                      {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
-                    </div>
+              {(() => {
+                const coreCount = exercises.filter((ex) => ex.plan.tier === "core").length;
+                const bonusCount = exercises.length - coreCount;
+                return (
+                  <div className="text-xs text-zinc-500 mb-2">
+                    今日の種目（必須{coreCount}種目
+                    {bonusCount > 0 && ` ＋ 任意${bonusCount}種目`}）
                   </div>
-                ))}
+                );
+              })()}
+              <div className="space-y-2">
+                {exercises.map((ex, i) => {
+                  const isBonus = ex.plan.tier === "bonus";
+                  const showBonusHeading = isBonus && exercises[i - 1]?.plan.tier !== "bonus";
+                  return (
+                    <div key={ex.plan.id}>
+                      {showBonusHeading && (
+                        <div className="pt-2 pb-1.5 mt-1 border-t border-zinc-800 text-xs text-zinc-600">
+                          ボーナス（余力があれば・達成率に影響なし）
+                        </div>
+                      )}
+                      <div
+                        className={`rounded-xl px-4 py-3 flex items-center justify-between ${
+                          isBonus ? "bg-zinc-900/50 border border-dashed border-zinc-700" : "bg-zinc-900"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`font-medium text-sm truncate ${isBonus ? "text-zinc-400" : ""}`}>
+                            {ex.plan.種目名}
+                          </span>
+                          {isBonus && (
+                            <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">
+                              任意
+                            </span>
+                          )}
+                        </div>
+                        <div className={`text-xs ml-2 text-right flex-shrink-0 ${isBonus ? "text-zinc-600" : "text-zinc-500"}`}>
+                          {ex.plan.目標重量kg > 0 ? `${ex.plan.目標重量kg}kg × ` : "自重 × "}
+                          {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

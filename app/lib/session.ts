@@ -3,6 +3,14 @@ import type { ExercisePlan, ExerciseState, SetInput } from "./types";
 const round2_5 = (x: number) => Math.round(x / 2.5) * 2.5;
 
 /**
+ * トレーニング実施用の種目一覧。保留中（hold）を除外する。
+ * 管理画面など全種目を扱う画面ではこれを使わないこと。
+ */
+export function activeExercises(plans: ExercisePlan[]): ExercisePlan[] {
+  return plans.filter((p) => p.tier !== "hold");
+}
+
+/**
  * 種目プランからセット配列を生成する。
  * ウォームアップセット数 > 0 かつ重量種目なら、目標重量の50〜80%を初期値として
  * 充填したウォームアップセットを先頭に追加する（ユーザーは編集可能）。

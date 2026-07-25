@@ -8,7 +8,7 @@ import ExerciseManageView from "./components/ExerciseManageView";
 import BottomTabBar, { type AppTab } from "./components/BottomTabBar";
 import HomeTab from "./components/HomeTab";
 import TrainTab from "./components/TrainTab";
-import { makeExerciseState as makeState } from "./lib/session";
+import { makeExerciseState as makeState, activeExercises } from "./lib/session";
 
 type Overlay = "custom" | "training" | "review" | null;
 
@@ -60,7 +60,8 @@ export default function Home() {
       const recommended = recData.部位リスト.find((bp) => bp.おすすめ) ?? recData.部位リスト[0];
       if (recommended) {
         setSelectedBodyPart(recommended.名前);
-        setExercises((exData[recommended.名前] ?? []).map(makeState));
+        // 保留中(hold)の種目はトレーニング対象に含めない
+        setExercises(activeExercises(exData[recommended.名前] ?? []).map(makeState));
       }
     } catch (e) {
       setError(String(e));
@@ -71,7 +72,7 @@ export default function Home() {
 
   const handleSelectBodyPart = (part: string) => {
     setSelectedBodyPart(part);
-    setExercises((allExercisesByPart[part] ?? []).map(makeState));
+    setExercises(activeExercises(allExercisesByPart[part] ?? []).map(makeState));
   };
 
   const handleCustomStart = (selected: ExerciseState[]) => {
@@ -135,11 +136,20 @@ export default function Home() {
             </div>
             <div className="mt-3 flex items-center gap-3">
               <div className="flex-1 bg-zinc-800 rounded-full h-2">
-                <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${review.達成率}%` }} />
+                <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min(100, review.達成率)}%` }} />
               </div>
               <div className="text-sm font-bold text-blue-400">{review.達成率}%</div>
             </div>
-            <div className="text-xs text-zinc-500 mt-1">達成率</div>
+            {review.achievement ? (
+              <div className="text-xs text-zinc-500 mt-1.5">
+                必須 {review.achievement.core_done}/{review.achievement.core_planned} セット
+                {review.achievement.bonus_done > 0 && (
+                  <span className="text-zinc-400"> ・ ボーナス +{review.achievement.bonus_done}</span>
+                )}
+              </div>
+            ) : (
+              <div className="text-xs text-zinc-500 mt-1">達成率</div>
+            )}
           </div>
 
           <div className="bg-zinc-900 rounded-xl p-4 flex items-center gap-3">

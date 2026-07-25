@@ -1,8 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
-import type { ExercisePlan } from "../lib/types";
+import type { ExercisePlan, Tier } from "../lib/types";
 
 const BODY_PARTS = ["胸・肩・三頭", "背中・二頭", "脚・お尻"];
+
+const TIERS: { value: Tier; label: string; hint: string }[] = [
+  { value: "core", label: "必須", hint: "達成率の分母に含む" },
+  { value: "bonus", label: "任意", hint: "余力があれば。加点扱い" },
+  { value: "hold", label: "保留", hint: "画面に出さず集計対象外" },
+];
 
 type EditState = {
   target_weight_kg: number;
@@ -68,6 +74,26 @@ export default function ExerciseManageView() {
     setEditingId(null);
   };
 
+  // 種目の区分（必須/任意/保留）を切り替える。
+  // 保留にした種目はトレーニング画面から消えるが、削除ではないのでここで戻せる。
+  const changeTier = async (id: string, tier: Tier) => {
+    const prevState = byPart[selectedPart];
+    // 楽観的に反映してから保存し、失敗したら戻す
+    setByPart((prev) => ({
+      ...prev,
+      [selectedPart]: prev[selectedPart].map((ex) => (ex.id === id ? { ...ex, tier } : ex)),
+    }));
+    const res = await fetch(`/api/exercises/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier }),
+    });
+    if (!res.ok) {
+      setByPart((prev) => ({ ...prev, [selectedPart]: prevState }));
+      alert("区分の変更に失敗しました");
+    }
+  };
+
   const deleteExercise = async (id: string, name: string) => {
     if (!confirm(`「${name}」を削除しますか？\n過去の記録は残ります。`)) return;
     const res = await fetch(`/api/exercises/${id}`, { method: "DELETE" });
@@ -103,6 +129,7 @@ export default function ExerciseManageView() {
         目標レップ数: data.target_reps,
         セット数: data.default_sets,
         ウォームアップセット数: data.warmup_sets ?? 0,
+        tier: (data.tier ?? "core") as Tier,
         前回セット: [],
       };
       setByPart((prev) => ({
@@ -150,11 +177,26 @@ export default function ExerciseManageView() {
         {loading && <div className="text-zinc-500 text-sm text-center py-8 animate-pulse">読み込み中...</div>}
 
         {exercises.map((ex) => (
-          <div key={ex.id} className="bg-zinc-900 rounded-xl overflow-hidden">
+          <div
+            key={ex.id}
+            className={`rounded-xl overflow-hidden ${
+              ex.tier === "hold" ? "bg-zinc-900/40 border border-dashed border-zinc-800" : "bg-zinc-900"
+            }`}
+          >
             <div className="px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="font-medium text-sm">{ex.種目名}</div>
-                <div className="text-xs text-zinc-500 mt-0.5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`font-medium text-sm truncate ${ex.tier === "hold" ? "text-zinc-500" : ""}`}>
+                    {ex.種目名}
+                  </span>
+                  {ex.tier === "bonus" && (
+                    <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">任意</span>
+                  )}
+                  {ex.tier === "hold" && (
+                    <span className="text-xs bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">保留</span>
+                  )}
+                </div>
+                <div className={`text-xs mt-0.5 ${ex.tier === "hold" ? "text-zinc-600" : "text-zinc-500"}`}>
                   {ex.目標重量kg > 0 ? `${ex.目標重量kg}kg` : "自重"} × {ex.目標レップ数}rep × {ex.セット数}set
                 </div>
               </div>
@@ -176,6 +218,27 @@ export default function ExerciseManageView() {
 
             {editingId === ex.id && (
               <div className="px-4 pb-4 space-y-3 border-t border-zinc-800 pt-3">
+                {/* 区分（tier）— 保存ボタン不要で即時反映 */}
+                <div>
+                  <div className="text-xs text-zinc-500 mb-1.5">区分</div>
+                  <div className="flex gap-1.5">
+                    {TIERS.map((t) => (
+                      <button
+                        key={t.value}
+                        onClick={() => changeTier(ex.id, t.value)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                          ex.tier === t.value ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-xs text-zinc-600 mt-1">
+                    {TIERS.find((t) => t.value === ex.tier)?.hint}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <div className="text-xs text-zinc-500 mb-1">目標重量（kg）</div>

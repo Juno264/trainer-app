@@ -8,7 +8,25 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { error } = await supabase.from("exercises").update(body).eq("id", id);
+
+    // 更新可能な列を明示する（任意の列を書き換えられないようにするため）
+    const ALLOWED = [
+      "name", "body_part", "target_weight_kg", "target_reps",
+      "default_sets", "warmup_sets", "tier", "sort_order",
+    ] as const;
+    const patch: Record<string, unknown> = {};
+    for (const key of ALLOWED) {
+      if (body[key] !== undefined) patch[key] = body[key];
+    }
+
+    if (body.tier !== undefined && !["core", "bonus", "hold"].includes(body.tier)) {
+      return NextResponse.json({ error: "tier は core / bonus / hold のいずれかです" }, { status: 400 });
+    }
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: "更新対象の項目がありません" }, { status: 400 });
+    }
+
+    const { error } = await supabase.from("exercises").update(patch).eq("id", id);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -7,7 +7,7 @@ export async function GET() {
     const [{ data: exList, error: exErr }, { data: records, error: recErr }] = await Promise.all([
       supabase
         .from("exercises")
-        .select("id, name, body_part, target_weight_kg, target_reps, default_sets, warmup_sets, sort_order")
+        .select("id, name, body_part, target_weight_kg, target_reps, default_sets, warmup_sets, tier, sort_order")
         .order("sort_order", { ascending: true }),
       supabase
         .from("training_records")
@@ -52,8 +52,16 @@ export async function GET() {
         目標レップ数: ex.target_reps,
         セット数: ex.default_sets,
         ウォームアップセット数: ex.warmup_sets ?? 0,
+        tier: (ex.tier ?? "core") as ExercisePlan["tier"],
         前回セット: prevSets,
       });
+    }
+
+    // core → bonus → hold の順に並べ、同じ区分内は sort_order を維持する。
+    // sort_order だけでソートすると必須と任意が混ざるため。
+    const TIER_ORDER: Record<string, number> = { core: 1, bonus: 2, hold: 3 };
+    for (const part of Object.keys(byPart)) {
+      byPart[part].sort((a, b) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1));
     }
 
     return NextResponse.json(byPart);
@@ -74,9 +82,11 @@ export async function POST(request: NextRequest) {
         default_sets: body.default_sets ?? 3,
         target_weight_kg: body.target_weight_kg ?? 0,
         target_reps: body.target_reps ?? 10,
+        warmup_sets: body.warmup_sets ?? 0,
+        tier: body.tier ?? "core",
         sort_order: body.sort_order ?? 99,
       })
-      .select("id, name, body_part, target_weight_kg, target_reps, default_sets, sort_order")
+      .select("id, name, body_part, target_weight_kg, target_reps, default_sets, warmup_sets, tier, sort_order")
       .single();
     if (error) throw error;
     return NextResponse.json(data);

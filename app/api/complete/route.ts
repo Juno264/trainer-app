@@ -36,9 +36,11 @@ type ClaudeTarget = {
 
 type NextAction = { アクション: string; 理由: string };
 
+type Tier = "core" | "bonus" | "hold";
+
+// 達成率はコード側で確定的に算出するため、Claudeには生成させない
 type ClaudeReview = {
   総合評価: "好調" | "普通" | "要注意";
-  達成率: number;
   前回比: "重量UP" | "維持" | "重量DOWN";
   レビュー本文: string;
   次回への指示: string;
@@ -58,8 +60,28 @@ export async function POST(request: NextRequest) {
   const today = 実施日 || new Date().toISOString().split("T")[0];
   const 体調 = records[0]?.体調 ?? "普通";
 
-  // 1. トレーニング記録をSupabaseに書き込む
-  const recordRows = records.flatMap((record) =>
+  // ── 0. 種目マスタ（tier / 予定セット数）を取得 ──────────────────────────
+  // tier はAI側が状況に応じて更新するため、必ずDBから読む（ハードコード禁止）
+  const { data: exMeta, error: exMetaErr } = await supabase
+    .from("exercises")
+    .select("name, tier, default_sets")
+    .eq("body_part", 部位);
+  if (exMetaErr) {
+    // ここで落ちると達成率が0%になってしまうため、原因が追えるよう明示的に記録する
+    console.error("Failed to fetch exercise meta (tier/default_sets):", exMetaErr);
+  }
+
+  const tierOf = (name: string): Tier =>
+    ((exMeta ?? []).find((e) => e.name === name)?.tier ?? "core") as Tier;
+  const plannedOf = (name: string): number =>
+    (exMeta ?? []).find((e) => e.name === name)?.default_sets ?? 0;
+
+  // 「実施した」＝1レップ以上の記録が存在すること。
+  // 種目を開いただけ（全0rep）は記録なしと同等に扱う。
+  const wasPerformed = (r: ExerciseRecord) => r.sets.some((s) => s.レップ数 > 0);
+
+  // ── 1. トレーニング記録をSupabaseに書き込む（未実施種目は保存しない）────
+  const recordRows = records.filter(wasPerformed).flatMap((record) =>
     record.sets.map((set, i) => ({
       exercise_name: record.種目名,
       body_part: 部位,
@@ -76,10 +98,46 @@ export async function POST(request: NextRequest) {
     }))
   );
 
-  const { error: insertErr } = await supabase
-    .from("training_records")
-    .upsert(recordRows, { onConflict: "exercise_name,trained_at,set_num", ignoreDuplicates: true });
-  if (insertErr) console.error("Failed to insert records:", insertErr);
+  if (recordRows.length > 0) {
+    const { error: insertErr } = await supabase
+      .from("training_records")
+      .upsert(recordRows, { onConflict: "exercise_name,trained_at,set_num", ignoreDuplicates: true });
+    if (insertErr) console.error("Failed to insert records:", insertErr);
+  }
+
+  // ── 1.5 達成率を確定的に算出する ────────────────────────────────────────
+  // 分母は core 種目の「予定セット数(default_sets)」の合計。実記録数ではないため、
+  // 種目を丸ごと飛ばしても正しく未達として反映される。
+  // bonus は分母にも分子にも入れず加点として別カウント。hold は完全に集計対象外。
+  const corePlanned = (exMeta ?? [])
+    .filter((e) => (e.tier ?? "core") === "core")
+    .reduce((sum, e) => sum + (e.default_sets ?? 0), 0);
+
+  let coreDone = 0;
+  let bonusDone = 0;
+  for (const r of records) {
+    const achieved = r.sets.filter((s) => s.達成).length;
+    if (achieved === 0) continue;
+    const tier = tierOf(r.種目名);
+    if (tier === "core") {
+      // 予定を超えて実施した分は加算しない（上限100%を保証）
+      coreDone += Math.min(achieved, plannedOf(r.種目名) || achieved);
+    } else if (tier === "bonus") {
+      bonusDone += achieved;
+    }
+    // hold は集計しない
+  }
+
+  const coreRate = corePlanned > 0
+    ? Math.max(0, Math.min(100, Math.round((coreDone / corePlanned) * 100)))
+    : 0;
+
+  const achievement = {
+    core_rate: coreRate,
+    core_done: coreDone,
+    core_planned: corePlanned,
+    bonus_done: bonusDone,
+  };
 
   // 2. 過去4週の履歴 + 直近レビューを取得してトレーナー視点の文脈を作る
   let 履歴文脈 = "";
@@ -157,8 +215,13 @@ export async function POST(request: NextRequest) {
   }
 
   // 3. 今回セッションの詳細（種目の実施順・セット内訳・メモ・RPE・総ボリューム）
+  const TIER_LABEL: Record<Tier, string> = { core: "必須", bonus: "任意(ボーナス)", hold: "保留" };
   let totalVolume = 0;
   const sessionLines = records.map((r, order) => {
+    const tier = tierOf(r.種目名);
+    if (!wasPerformed(r)) {
+      return `【${order + 1}種目目: ${r.種目名}】[${TIER_LABEL[tier]}] 未実施（記録なし）`;
+    }
     const setDetails = r.sets
       .map((s, i) => {
         totalVolume += (s.重量kg > 0 ? s.重量kg : 1) * s.レップ数;
@@ -169,8 +232,13 @@ export async function POST(request: NextRequest) {
     const prev = prevBests[r.種目名];
     const prevLine = prev ? ` / 自己ベスト${fmtW(prev.weight_kg)}×${prev.reps}` : " / 初回種目";
     const memoLine = r.メモ?.trim() ? `\n  メモ: 「${r.メモ.trim()}」` : "";
-    return `【${order + 1}種目目: ${r.種目名}】${prevLine}\n${setDetails}\n  達成 ${achievedCount}/${r.sets.length}セット, RPE${r.RPE}${memoLine}`;
+    return `【${order + 1}種目目: ${r.種目名}】[${TIER_LABEL[tier]}]${prevLine}\n${setDetails}\n  達成 ${achievedCount}/${r.sets.length}セット, RPE${r.RPE}${memoLine}`;
   });
+
+  const 達成率文脈 = `\n\n【達成率（システムが算出済み・変更禁止）】
+必須達成率: ${coreRate}%（必須 ${coreDone}/${corePlanned} セット）${bonusDone > 0 ? `\nボーナス達成: +${bonusDone}セット` : ""}
+※ 必須(core)種目のみで算出。任意(bonus)は分母・分子に含めず加点扱い。保留(hold)は集計対象外。
+※ 未実施の必須種目は「予定セット数ぶん未達」として分母に残っている。`;
 
   const userPrompt = `あなたは私の専属パーソナルトレーナーです。今日のトレーニングを終えた私に、対面で声をかけるようにフィードバックしてください。
 
@@ -178,7 +246,7 @@ export async function POST(request: NextRequest) {
 種目は上から実施した順番です。後半の種目ほど疲労が蓄積している点を考慮してください。
 セッション総ボリューム(重量×回数の合計): 約${Math.round(totalVolume)}
 
-${sessionLines.join("\n\n")}${履歴文脈}${直近レビュー文脈}
+${sessionLines.join("\n\n")}${達成率文脈}${履歴文脈}${直近レビュー文脈}
 
 【分析方針 — 必ず守ること】
 1. まず「今日できたこと」を具体的に挙げて認める。数値で達成できた部分を見つける。
@@ -188,6 +256,7 @@ ${sessionLines.join("\n\n")}${履歴文脈}${直近レビュー文脈}
 5. 前回までの自分の指示（あれば）との一貫性を持たせる。前回言ったことが実行できていれば褒める。
 6. 改善点は1つに絞る。あれもこれも言わない。実行可能な具体的アクションだけ提示する。
 7. ネガティブな指摘で終わらせない。励ましとして「次回はこうすれば伸びる」で締める。
+8. 任意(bonus)種目が未実施でも責めない。あくまで余力があればやるもの。実施できていたら加点として褒める。
 
 【次回目標値の調整ルール】
 - 全セット達成 & RPE7以下 → 次回 +2.5kg（自重種目はレップ+1）
@@ -195,11 +264,12 @@ ${sessionLines.join("\n\n")}${履歴文脈}${直近レビュー文脈}
 - 後半種目での未達や疲労明らか → 維持（疲労が原因なら重量は据え置く）
 - 3週連続で未達が続く種目 → 目標を1段階下げる（高すぎる）
 - 自重種目(目標重量0kg)は目標重量kgを0のまま。レップ数は1未満にしない。
+- **「未実施（記録なし）」の種目は目標値を絶対に変更しない。** 実施していない以上、
+  重量を上下させる根拠が存在しないため。この種目は「種目別次回目標」から除外すること。
 
 以下のJSON形式のみで回答してください（コードブロックや説明文を付けない）:
 {
   "総合評価": "好調|普通|要注意",
-  "達成率": 0-100の整数,
   "前回比": "重量UP|維持|重量DOWN",
   "良かった点": ["今日実際にできた具体的な事を2〜3個"],
   "重点ポイント": "次回向けに絞った1つの改善テーマ",
@@ -213,7 +283,6 @@ ${sessionLines.join("\n\n")}${履歴文脈}${直近レビュー文脈}
 
   const fallback: ClaudeReview = {
     総合評価: "普通",
-    達成率: 0,
     前回比: "維持",
     レビュー本文: "レビューの生成に失敗しました。お疲れさまでした、記録は保存されています。",
     次回への指示: "前回と同じ内容で続けてください。",
@@ -222,12 +291,8 @@ ${sessionLines.join("\n\n")}${履歴文脈}${直近レビュー文脈}
     次回アクション: [],
     メモ反映: "",
     長期トレンド: "",
-    種目別次回目標: records.map((r) => ({
-      種目名: r.種目名,
-      目標重量kg: r.sets[0]?.目標重量kg ?? 0,
-      目標レップ数: r.sets[0]?.目標レップ数 ?? 0,
-      調整理由: "AI分析エラー",
-    })),
+    // AI分析が失敗したときは目標値を一切動かさない（誤調整を防ぐ）
+    種目別次回目標: [],
   };
 
   let claudeResult: ClaudeReview = fallback;
@@ -262,13 +327,15 @@ ${sessionLines.join("\n\n")}${履歴文脈}${直近レビュー文脈}
     次回アクション: claudeResult.次回アクション,
     メモ反映: claudeResult.メモ反映,
     長期トレンド: claudeResult.長期トレンド,
+    achievement,
   };
   const { error: reviewErr } = await supabase.from("reviews").upsert(
     {
       body_part: 部位,
       trained_at: today,
       overall_rating: claudeResult.総合評価,
-      achievement_rate: claudeResult.達成率,
+      // 必須(core)達成率のみを保存する。2026-07-25 以前の値は旧ロジックのため直接比較できない
+      achievement_rate: coreRate,
       weight_change: claudeResult.前回比,
       review_text: claudeResult.レビュー本文,
       next_instruction: claudeResult.次回への指示,
@@ -281,9 +348,29 @@ ${sessionLines.join("\n\n")}${履歴文脈}${直近レビュー文脈}
   );
   if (reviewErr) console.error("Failed to save review:", reviewErr);
 
-  // 5. 種目マスタの目標値を更新（自重種目のレップ下限を保証）
+  // 5. 種目マスタの目標値を更新
+  //
+  // 【重要】自動調整は「実際に実施した core 種目」に限る。
+  // 記録がない種目まで調整対象にしていたため、実施していない種目の目標重量が
+  // セッションのたびに下がり続ける不具合があった（脚・お尻が57.5kgまで低下）。
+  // 「記録がない」と「実施したが未達」は別の事象で、前者はシグナルが存在しない。
+  const adjustable = new Set(
+    records
+      .filter(wasPerformed)                       // 全0rep・空入力は記録なしと同等
+      .filter((r) => tierOf(r.種目名) === "core") // bonus は未達が仕様上ありうる / hold は対象外
+      .map((r) => r.種目名)
+  );
+
+  const skipped = claudeResult.種目別次回目標
+    .filter((t) => !adjustable.has(t.種目名))
+    .map((t) => t.種目名);
+  if (skipped.length > 0) {
+    console.log("目標値の自動調整をスキップ（未実施 or core以外）:", skipped.join(", "));
+  }
+
   await Promise.all(
     claudeResult.種目別次回目標.map(async (target) => {
+      if (!adjustable.has(target.種目名)) return;
       const exercise = records.find((r) => r.種目名 === target.種目名);
       if (!exercise?.id) return;
       const isBodyweight = (exercise.sets[0]?.目標重量kg ?? 0) === 0;
@@ -311,7 +398,8 @@ ${sessionLines.join("\n\n")}${履歴文脈}${直近レビュー文脈}
 
   return NextResponse.json({
     総合評価: claudeResult.総合評価,
-    達成率: claudeResult.達成率,
+    達成率: coreRate,
+    achievement,
     前回比: claudeResult.前回比,
     レビュー本文: claudeResult.レビュー本文,
     次回への指示: claudeResult.次回への指示,
