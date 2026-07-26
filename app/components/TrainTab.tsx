@@ -1,5 +1,5 @@
 "use client";
-import type { BodyPartInfo, ExercisePlan, ExerciseState } from "../lib/types";
+import type { BodyPartInfo, ExercisePlan, ExerciseState, TodayPlan } from "../lib/types";
 import { formatWeight } from "../lib/load";
 
 type Props = {
@@ -7,6 +7,7 @@ type Props = {
   allExercisesByPart: Record<string, ExercisePlan[]>;
   selectedBodyPart: string;
   exercises: ExerciseState[];
+  todayPlan: TodayPlan | null;
   error: string | null;
   onRetry: () => void;
   onSelectBodyPart: (part: string) => void;
@@ -38,11 +39,14 @@ const STATUS_BAR: Record<string, string> = {
 };
 
 export default function TrainTab({
-  bodyPartList, allExercisesByPart, selectedBodyPart, exercises,
+  bodyPartList, allExercisesByPart, selectedBodyPart, exercises, todayPlan,
   error, onRetry, onSelectBodyPart, onStartTraining, onCustomEdit,
 }: Props) {
   const jisaburiCount = bodyPartList.filter((bp) => bp.状態 === "久しぶり" || bp.状態 === "未実施").length;
   const selectedInfo = bodyPartList.find((bp) => bp.名前 === selectedBodyPart);
+  // 予定と違う部位を選んでもブロックはしない。注記を出すだけに留める
+  const offPlan =
+    !!todayPlan && !!selectedBodyPart && todayPlan.部位 !== null && todayPlan.部位 !== selectedBodyPart;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -118,6 +122,11 @@ export default function TrainTab({
 
           {selectedBodyPart && selectedInfo && (
             <div className="px-4 mt-4 pb-4">
+              {offPlan && (
+                <div className="mb-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-400">
+                  今日の予定は「{todayPlan?.部位}」です。このまま続けても問題ありません。
+                </div>
+              )}
               {selectedInfo.状態 === "そろそろ" && (
                 <div className="mb-3 bg-yellow-950/30 border border-yellow-800/40 rounded-xl px-4 py-2.5 text-xs text-yellow-300">
                   {selectedInfo.経過日数}日前のトレーニングです。いいタイミングです。
