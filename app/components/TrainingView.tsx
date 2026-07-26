@@ -336,6 +336,16 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                   <span className="text-zinc-500 text-lg">{ex.expanded ? "▲" : "▼"}</span>
                 </button>
 
+              {/* 実施指示。折り畳みの中に入れると読まれないまま実施されるため、
+                  カードの展開状態と関係なく常時表示する */}
+              {ex.plan.指示 && (
+                <div className="mx-4 mb-3 bg-amber-950/25 border border-amber-800/40 rounded-lg px-3 py-2">
+                  <div className="text-xs leading-relaxed text-amber-200/90 whitespace-pre-wrap break-words">
+                    {ex.plan.指示}
+                  </div>
+                </div>
+              )}
+
               {ex.expanded && (
                 <div className="px-4 pb-4 space-y-3">
                   {/* セットリスト */}

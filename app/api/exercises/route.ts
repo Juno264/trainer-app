@@ -7,7 +7,7 @@ export async function GET() {
     const [{ data: exList, error: exErr }, { data: records, error: recErr }] = await Promise.all([
       supabase
         .from("exercises")
-        .select("id, name, body_part, target_weight_kg, target_reps, default_sets, warmup_sets, tier, load_type, sort_order")
+        .select("id, name, body_part, target_weight_kg, target_reps, default_sets, warmup_sets, tier, load_type, instruction, sort_order")
         .order("sort_order", { ascending: true }),
       supabase
         .from("training_records")
@@ -54,6 +54,7 @@ export async function GET() {
         ウォームアップセット数: ex.warmup_sets ?? 0,
         tier: (ex.tier ?? "core") as ExercisePlan["tier"],
         負荷タイプ: (ex.load_type ?? "external") as ExercisePlan["負荷タイプ"],
+        指示: ex.instruction ?? null,
         前回セット: prevSets,
       });
     }
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
         load_type: body.load_type ?? "external",
         sort_order: body.sort_order ?? 99,
       })
-      .select("id, name, body_part, target_weight_kg, target_reps, default_sets, warmup_sets, tier, load_type, sort_order")
+      .select("id, name, body_part, target_weight_kg, target_reps, default_sets, warmup_sets, tier, load_type, instruction, sort_order")
       .single();
     if (error) throw error;
     return NextResponse.json(data);
