@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { HistorySession, ExercisePlan, StatsPoint, WeeklySummary } from "../lib/types";
 import { formatWeight } from "../lib/load";
@@ -34,6 +34,12 @@ const PART_DOT_COLOR: Record<string, string> = {
   "有酸素（プール）": "bg-cyan-500",
 };
 const BODY_PARTS = ["胸・肩・三頭", "背中・二頭", "脚・お尻"];
+/**
+ * 達成率の算出方法が変わった日。これより前の achievement_rate は
+ * 「記録した全セット中の達成セット数」という旧ロジックの値で、
+ * 必須(core)種目の予定セット数を分母にした現在の値と直接比較できない。
+ */
+const TIER_RULE_START = "2026-07-25";
 
 const fmt = (date: string) => {
   const d = new Date(date);
@@ -127,21 +133,91 @@ export default function HistoryView() {
   // カレンダータブ
   const [calendarData, setCalendarData] = useState<Record<string, string[]>>({});
 
-  useEffect(() => {
-    fetch("/api/history")
-      .then((r) => r.json())
-      .then((data) => Array.isArray(data) ? setSessions(data) : setSessionError(data.error ?? "エラー"))
-      .catch(() => setSessionError("履歴の取得に失敗しました"))
-      .finally(() => setLoadingSessions(false));
+  // 引っ張って更新
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pullRef = useRef<{ startY: number; active: boolean }>({ startY: 0, active: false });
+  const [pullY, setPullY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
-    fetch("/api/exercises")
-      .then((r) => r.json())
-      .then((data) => { if (!data.error) setByPart(data); });
+  // 記録はアプリ外（DB直編集・外部AI分析）からも書き換わるため、常にサーバーから取り直す
+  const loadAll = useCallback(async () => {
+    try {
+      const [histRes, exRes, calRes] = await Promise.all([
+        fetch("/api/history", { cache: "no-store" }),
+        fetch("/api/exercises", { cache: "no-store" }),
+        fetch("/api/calendar", { cache: "no-store" }),
+      ]);
+      const hist = await histRes.json();
+      if (Array.isArray(hist)) {
+        setSessions(hist);
+        setSessionError(null);
+      } else {
+        setSessionError(hist.error ?? "エラー");
+      }
 
-    fetch("/api/calendar")
-      .then((r) => r.json())
-      .then((data) => { if (!data.error) setCalendarData(data); });
+      const ex = await exRes.json();
+      if (!ex.error) setByPart(ex);
+
+      const cal = await calRes.json();
+      if (!cal.error) setCalendarData(cal);
+    } catch {
+      setSessionError("履歴の取得に失敗しました");
+    } finally {
+      setLoadingSessions(false);
+    }
   }, []);
+
+  // マイクロタスクに逃がしてから呼ぶ。effect本体で直接setStateすると
+  // カスケードレンダリングになるため（react-hooks/set-state-in-effect）
+  useEffect(() => { Promise.resolve().then(loadAll); }, [loadAll]);
+
+  // フォアグラウンド復帰時に再取得する。
+  // PWAは閉じてもプロセスが残るため、これがないと編集前の値を表示し続ける。
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadAll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [loadAll]);
+
+  const runRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadAll();
+    setRefreshing(false);
+  }, [loadAll]);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    const el = scrollRef.current;
+    // 最上部にいるときだけ引っ張り開始と見なす（通常のスクロールを妨げない）
+    if (!el || el.scrollTop > 0 || refreshing) {
+      pullRef.current.active = false;
+      return;
+    }
+    pullRef.current = { startY: e.touches[0].clientY, active: true };
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!pullRef.current.active) return;
+    const dy = e.touches[0].clientY - pullRef.current.startY;
+    if (dy <= 0) {
+      setPullY(0);
+      return;
+    }
+    // 減衰させて指の動きより控えめに追従させる
+    setPullY(Math.min(80, Math.pow(dy, 0.8)));
+  };
+
+  const onTouchEnd = () => {
+    if (!pullRef.current.active) return;
+    pullRef.current.active = false;
+    if (pullY >= 55) runRefresh();
+    setPullY(0);
+  };
 
   const fetchWeeklySummary = () => {
     setLoadingSummary(true);
@@ -194,8 +270,29 @@ export default function HistoryView() {
         </div>
       </div>
 
+      {/* 引っ張って更新インジケータ */}
+      {(pullY > 0 || refreshing) && (
+        <div
+          className="flex-shrink-0 flex items-center justify-center overflow-hidden text-xs text-zinc-500"
+          style={{ height: refreshing ? 36 : pullY }}
+        >
+          {refreshing ? (
+            <span className="animate-pulse">更新中...</span>
+          ) : (
+            <span>{pullY >= 55 ? "離して更新" : "引っ張って更新"}</span>
+          )}
+        </div>
+      )}
+
       {/* コンテンツ */}
-      <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide">
+      <div
+        ref={scrollRef}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        className="flex-1 min-h-0 overflow-y-scroll overscroll-contain scrollbar-hide"
+      >
 
         {/* ─── 記録タブ ─── */}
         {tab === "記録" && (
@@ -265,6 +362,9 @@ export default function HistoryView() {
                           <span className={`ml-2 ${RATING_COLOR[session.review.総合評価]}`}>
                             {session.review.総合評価} {session.review.達成率}%
                           </span>
+                        )}
+                        {session.review && session.date < TIER_RULE_START && (
+                          <span className="ml-1 text-zinc-600">(旧基準)</span>
                         )}
                         {session.review && (
                           <span className={`ml-1 ${CHANGE_COLOR[session.review.前回比]}`}>
