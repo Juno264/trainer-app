@@ -29,29 +29,25 @@ type CompleteBody = {
   records: ExerciseRecord[];
 };
 
-type ClaudeTarget = {
-  種目名: string;
-  目標重量kg: number;
-  目標レップ数: number;
-  調整理由: string;
-};
-
 type NextAction = { アクション: string; 理由: string };
 
 type Tier = "core" | "bonus" | "hold";
 
-// 達成率はコード側で確定的に算出するため、Claudeには生成させない
+/**
+ * 自動レビューの守備範囲は「今日の記録の要約」まで。
+ * 達成率はコード側で確定的に算出するため生成させない。
+ * 次回の重量・レップ数の処方（次回への指示 / 種目別次回目標）も生成させない —
+ * その判断は外部AI分析に一本化した。
+ */
 type ClaudeReview = {
   総合評価: "好調" | "普通" | "要注意";
   前回比: "重量UP" | "維持" | "重量DOWN";
   レビュー本文: string;
-  次回への指示: string;
   良かった点: string[];
   重点ポイント: string;
   次回アクション: NextAction[];
   メモ反映: string;
   長期トレンド: string;
-  種目別次回目標: ClaudeTarget[];
 };
 
 /** 種目の負荷タイプを考慮した重量表記。アシストは「アシスト40kg」と出す */
@@ -264,53 +260,49 @@ ${sessionLines.join("\n\n")}${達成率文脈}${履歴文脈}${直近レビュ�
 【分析方針 — 必ず守ること】
 1. まず「今日できたこと」を具体的に挙げて認める。数値で達成できた部分を見つける。
 2. メモがある種目は、メモの内容を必ず分析に反映する（例:「フォームが甘い」なら疲労・集中・時間のどれが原因か推測して言及）。
-3. 種目の実施順を見る。後半の種目で未達なら「疲労の影響」と判断し、重量を下げる指示は安易に出さない。
-4. 過去4週のトレンドを見る。3週連続で未達なら目標値が高すぎるサインなので、目標を下げることを提案する。逆に余裕で達成が続くなら重量UPを促す。
+3. 種目の実施順を見る。後半の種目で未達なら、種目そのものの限界ではなく「疲労の影響」と判断する。
+4. 過去4週のトレンドを見て、プラトーか順調かの見立てを「長期トレンド」に書く。
 5. 前回までの自分の指示（あれば）との一貫性を持たせる。前回言ったことが実行できていれば褒める。
 6. 改善点は1つに絞る。あれもこれも言わない。実行可能な具体的アクションだけ提示する。
 7. ネガティブな指摘で終わらせない。励ましとして「次回はこうすれば伸びる」で締める。
 8. 任意(bonus)種目が未実施でも責めない。あくまで余力があればやるもの。実施できていたら加点として褒める。
 
-【次回目標値の調整ルール】
-- 全セット達成 & RPE7以下 → 次回 +2.5kg（自重種目はレップ+1）
-- 全セット達成 & RPE8〜9 → 維持（フォーム定着フェーズ）
-- 後半種目での未達や疲労明らか → 維持（疲労が原因なら重量は据え置く）
-- 3週連続で未達が続く種目 → 目標を1段階下げる（高すぎる）
-- **自重ベースの種目（懸垂・ディップスなど）の重量の読み方**：
-  「アシストNkg」＝ 補助を N kg 受けている状態で、目標重量kg には **負の数**（-N）が入る。
+【重要 — 絶対に守る制約】
+次回の目標重量・レップ数を決めるのは**あなたの仕事ではない**。別のAI分析が担当している。
+- 「次回は◯kgにしましょう」のような具体的な数値の処方を書かない。
+- 重量やレップ数を上げる/下げるという判断そのものを書かない。
+- 書いてよいのは「今日の記録の要約」と「フォーム・意識の持ち方」まで。
+理由: メモに書かれた器具の制約（例:「このマシンは13kgと18kgの2択しかない」）を無視した
+存在しない重量を指示したり、自己ベストを事故と誤認して巻き戻す事故が実際に起きたため。
+
+【重量表記の読み方（記録を正しく解釈するために必要）】
+- 「アシストNkg」＝ 補助を N kg 受けている状態で、内部的には **負の数**（-N）で記録される。
   アシストが減る（-40 → -30）ほど自分の力で挙げていることになり、これが**進歩**。
-  したがって強くなったらアシストを減らす方向（負の数を0に近づける）に調整すること。
-  「自重+Nkg」は加重で、こちらは正の数。レップ数は1未満にしない。
-  現在の体重は ${bodyWeight}kg。実効負荷は 体重＋目標重量kg で計算している。
-- **「未実施（記録なし）」の種目は目標値を絶対に変更しない。** 実施していない以上、
-  重量を上下させる根拠が存在しないため。この種目は「種目別次回目標」から除外すること。
+  数値が増えたように見えても後退ではないので、前回比の判定を誤らないこと。
+- 「自重+Nkg」は加重で、こちらは正の数。
+- 現在の体重は ${bodyWeight}kg。実効負荷は 体重＋重量kg で計算している。
 
 以下のJSON形式のみで回答してください（コードブロックや説明文を付けない）:
 {
   "総合評価": "好調|普通|要注意",
   "前回比": "重量UP|維持|重量DOWN",
   "良かった点": ["今日実際にできた具体的な事を2〜3個"],
-  "重点ポイント": "次回向けに絞った1つの改善テーマ",
-  "次回アクション": [{"アクション": "実行可能な具体策", "理由": "なぜそれをやるのか"}],
+  "重点ポイント": "次回向けに絞った1つの改善テーマ（重量の数値には触れない）",
+  "次回アクション": [{"アクション": "フォームや意識に関する具体策（重量やレップ数の指示は書かない）", "理由": "なぜそれをやるのか"}],
   "メモ反映": "メモの内容をどう解釈し分析に活かしたか（メモが無ければ空文字）",
   "長期トレンド": "過去4週の推移から見た現状一言（プラトー/順調/要調整など）",
-  "レビュー本文": "対面で話すような温かいレビュー(200文字以内、良かった点→背景→励まし)",
-  "次回への指示": "次回最初に意識する一言(80文字以内)",
-  "種目別次回目標": [{"種目名": "種目名", "目標重量kg": 数値, "目標レップ数": 数値, "調整理由": "なぜその重量か"}]
+  "レビュー本文": "対面で話すような温かいレビュー(200文字以内、良かった点→背景→励まし)"
 }`;
 
   const fallback: ClaudeReview = {
     総合評価: "普通",
     前回比: "維持",
     レビュー本文: "レビューの生成に失敗しました。お疲れさまでした、記録は保存されています。",
-    次回への指示: "前回と同じ内容で続けてください。",
     良かった点: [],
     重点ポイント: "",
     次回アクション: [],
     メモ反映: "",
     長期トレンド: "",
-    // AI分析が失敗したときは目標値を一切動かさない（誤調整を防ぐ）
-    種目別次回目標: [],
   };
 
   let claudeResult: ClaudeReview = fallback;
@@ -331,7 +323,6 @@ ${sessionLines.join("\n\n")}${達成率文脈}${履歴文脈}${直近レビュ�
         ...parsed,
         良かった点: parsed.良かった点 ?? [],
         次回アクション: parsed.次回アクション ?? [],
-        種目別次回目標: parsed.種目別次回目標 ?? fallback.種目別次回目標,
       };
     }
   } catch (e) {
@@ -339,6 +330,10 @@ ${sessionLines.join("\n\n")}${達成率文脈}${履歴文脈}${直近レビュ�
   }
 
   // 4. レビューをSupabaseに保存（構造化レビューは review_json に）
+  //
+  // next_instruction / weight_adjustment_memo は意図的に upsert の対象外にしている。
+  // この2列は外部AI分析が重量・レップ数の判断を書き込む先で、アプリが上書きしてはならない。
+  // upsert は渡したキーだけを UPDATE するため、省略すれば既存値がそのまま残る。
   const review_json = {
     良かった点: claudeResult.良かった点,
     重点ポイント: claudeResult.重点ポイント,
@@ -356,58 +351,18 @@ ${sessionLines.join("\n\n")}${達成率文脈}${履歴文脈}${直近レビュ�
       achievement_rate: coreRate,
       weight_change: claudeResult.前回比,
       review_text: claudeResult.レビュー本文,
-      next_instruction: claudeResult.次回への指示,
-      weight_adjustment_memo: claudeResult.種目別次回目標
-        .map((e) => `${e.種目名}: ${e.調整理由}`)
-        .join(", "),
       review_json,
     },
     { onConflict: "body_part,trained_at" }
   );
   if (reviewErr) console.error("Failed to save review:", reviewErr);
 
-  // 5. 種目マスタの目標値を更新
+  // 5. 種目マスタ（target_weight_kg / target_reps）の自動更新は行わない。
   //
-  // 【重要】自動調整は「実際に実施した core 種目」に限る。
-  // 記録がない種目まで調整対象にしていたため、実施していない種目の目標重量が
-  // セッションのたびに下がり続ける不具合があった（脚・お尻が57.5kgまで低下）。
-  // 「記録がない」と「実施したが未達」は別の事象で、前者はシグナルが存在しない。
-  const adjustable = new Set(
-    records
-      .filter(wasPerformed)                       // 全0rep・空入力は記録なしと同等
-      .filter((r) => tierOf(r.種目名) === "core") // bonus は未達が仕様上ありうる / hold は対象外
-      .map((r) => r.種目名)
-  );
-
-  const skipped = claudeResult.種目別次回目標
-    .filter((t) => !adjustable.has(t.種目名))
-    .map((t) => t.種目名);
-  if (skipped.length > 0) {
-    console.log("目標値の自動調整をスキップ（未実施 or core以外）:", skipped.join(", "));
-  }
-
-  await Promise.all(
-    claudeResult.種目別次回目標.map(async (target) => {
-      if (!adjustable.has(target.種目名)) return;
-      const exercise = records.find((r) => r.種目名 === target.種目名);
-      if (!exercise?.id) return;
-      // 自重種目は重量が負（アシスト）になりうるので 0 で切り上げてはいけない。
-      // レップ数だけは1未満にしない（過去に -2 に壊れた事故があるため）。
-      const isBodyweight = loadTypeOf(target.種目名) === "bodyweight";
-      const safeReps = isBodyweight ? Math.max(1, target.目標レップ数) : target.目標レップ数;
-      const safeWeight = isBodyweight ? target.目標重量kg : Math.max(0, target.目標重量kg);
-      const { error } = await supabase
-        .from("exercises")
-        .update({
-          target_weight_kg: safeWeight,
-          target_reps: safeReps,
-          adjustment_reason: target.調整理由,
-          last_updated_at: today,
-        })
-        .eq("id", exercise.id);
-      if (error) console.error("Failed to update exercise:", error);
-    })
-  );
+  // かつては実施した core 種目に限って自動調整していたが、ガードを足しても
+  // 「実現しない重量を指示する」「自己ベストを事故と誤認して巻き戻す」事故が残った。
+  // 重量・レップ数を決める判断そのものを外部AI分析に移し、アプリからは書き込まない。
+  // 変更は exercises.instruction / reviews.next_instruction 経由で人に伝わる。
 
   // 6. 部位マスタの最終実施日を更新
   const { error: partErr } = await supabase
@@ -416,13 +371,25 @@ ${sessionLines.join("\n\n")}${達成率文脈}${履歴文脈}${直近レビュ�
     .eq("name", 部位);
   if (partErr) console.error("Failed to update body_parts:", partErr);
 
+  // 次回への指示は外部AI分析が reviews.next_instruction に書き込む。
+  // 既に書き込まれていればそれを表示し、まだなら空文字（画面側で非表示になる）。
+  let 次回への指示 = "";
+  const { data: savedReview, error: readBackErr } = await supabase
+    .from("reviews")
+    .select("next_instruction")
+    .eq("body_part", 部位)
+    .eq("trained_at", today)
+    .maybeSingle();
+  if (readBackErr) console.error("Failed to read back next_instruction:", readBackErr);
+  else 次回への指示 = savedReview?.next_instruction ?? "";
+
   return NextResponse.json({
     総合評価: claudeResult.総合評価,
     達成率: coreRate,
     achievement,
     前回比: claudeResult.前回比,
     レビュー本文: claudeResult.レビュー本文,
-    次回への指示: claudeResult.次回への指示,
+    次回への指示,
     良かった点: claudeResult.良かった点,
     重点ポイント: claudeResult.重点ポイント,
     次回アクション: claudeResult.次回アクション,

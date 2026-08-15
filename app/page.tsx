@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import type { ExercisePlan, ExerciseState, RecommendData, BodyPartInfo, Condition, ReviewResult } from "./lib/types";
+import type { ExercisePlan, ExerciseState, RecommendData, BodyPartInfo, Condition, ReviewResult, TodayPlan } from "./lib/types";
 import TrainingView from "./components/TrainingView";
 import CustomEditView from "./components/CustomEditView";
 import HistoryView from "./components/HistoryView";
@@ -36,6 +36,7 @@ export default function Home() {
   const [exercises, setExercises] = useState<ExerciseState[]>([]);
   const [condition, setCondition] = useState<Condition>("普通");
   const [review, setReview] = useState<ReviewResult | null>(null);
+  const [todayPlan, setTodayPlan] = useState<TodayPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   // 自重種目のウォームアップ生成に使う（実効負荷＝体重±重量）
   const [bodyWeight, setBodyWeight] = useState<number>(DEFAULT_BODY_WEIGHT);
@@ -48,10 +49,11 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const [recRes, exRes, setRes] = await Promise.all([
+      const [recRes, exRes, setRes, planRes] = await Promise.all([
         fetch("/api/recommend"),
         fetch("/api/exercises"),
         fetch("/api/settings"),
+        fetch("/api/program-plan"),
       ]);
       if (!recRes.ok) {
         const d = await recRes.json();
@@ -61,18 +63,25 @@ export default function Home() {
       const exData: Record<string, ExercisePlan[]> = exRes.ok ? await exRes.json() : {};
       const setData = setRes.ok ? await setRes.json() : null;
       const bw = setData?.体重kg ?? DEFAULT_BODY_WEIGHT;
+      // 予定が取れなくても他の機能は動かせるようにする（表示が出ないだけ）
+      const planData: { plan?: TodayPlan | null } = planRes.ok ? await planRes.json() : {};
+      const plan = planData.plan ?? null;
 
       setBodyPartList(recData.部位リスト);
       setAllExercisesByPart(exData);
       setBodyWeight(bw);
+      setTodayPlan(plan);
 
+      // 予定がある日はその部位を初期選択する。
+      // 予定が無い日・休養日は従来どおり回復状況からのおすすめにフォールバックする。
       const recommended = recData.部位リスト.find((bp) => bp.おすすめ) ?? recData.部位リスト[0];
-      if (recommended) {
-        setSelectedBodyPart(recommended.名前);
+      const initial = plan?.部位 && exData[plan.部位] ? plan.部位 : recommended?.名前 ?? "";
+      if (initial) {
+        setSelectedBodyPart(initial);
         // 保留中(hold)の種目はトレーニング対象に含めない。
         // 体調stateの反映を待たずに済むよう、取得した体重を直接渡す
         setExercises(
-          activeExercises(exData[recommended.名前] ?? []).map((p) => makeExerciseState(p, bw))
+          activeExercises(exData[initial] ?? []).map((p) => makeExerciseState(p, bw))
         );
       }
     } catch (e) {
@@ -272,6 +281,7 @@ export default function Home() {
           <HomeTab
             bodyPartList={bodyPartList}
             selectedBodyPart={selectedBodyPart}
+            todayPlan={todayPlan}
             error={error}
             onRetry={fetchData}
             onStartTraining={() => setOverlay("training")}
@@ -284,6 +294,7 @@ export default function Home() {
             allExercisesByPart={allExercisesByPart}
             selectedBodyPart={selectedBodyPart}
             exercises={exercises}
+            todayPlan={todayPlan}
             error={error}
             onRetry={fetchData}
             onSelectBodyPart={handleSelectBodyPart}

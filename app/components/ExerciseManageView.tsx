@@ -175,6 +175,7 @@ export default function ExerciseManageView() {
         ウォームアップセット数: data.warmup_sets ?? 0,
         tier: (data.tier ?? "core") as Tier,
         負荷タイプ: (data.load_type ?? "external") as LoadType,
+        指示: data.instruction ?? null,
         前回セット: [],
       };
       setByPart((prev) => ({

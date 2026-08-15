@@ -1,9 +1,10 @@
 "use client";
-import type { BodyPartInfo } from "../lib/types";
+import type { BodyPartInfo, TodayPlan } from "../lib/types";
 
 type Props = {
   bodyPartList: BodyPartInfo[];
   selectedBodyPart: string;
+  todayPlan: TodayPlan | null;
   error: string | null;
   onRetry: () => void;
   onStartTraining: () => void;
@@ -33,8 +34,14 @@ const STATUS_BAR: Record<string, string> = {
   未実施: "bg-blue-500",
 };
 
-export default function HomeTab({ bodyPartList, selectedBodyPart, error, onRetry, onStartTraining, onGoToTrain }: Props) {
+export default function HomeTab({ bodyPartList, selectedBodyPart, todayPlan, error, onRetry, onStartTraining, onGoToTrain }: Props) {
   const recommended = bodyPartList.find((bp) => bp.おすすめ) ?? bodyPartList[0];
+  // 予定がある日はその部位のコンディションを見せる（無ければ従来のおすすめ）
+  const planPart = todayPlan?.部位
+    ? bodyPartList.find((bp) => bp.名前 === todayPlan.部位)
+    : undefined;
+  const featured = planPart ?? recommended;
+  const isRestDay = !!todayPlan && todayPlan.部位 === null;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -52,23 +59,68 @@ export default function HomeTab({ bodyPartList, selectedBodyPart, error, onRetry
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-scroll scrollbar-hide px-4 py-4 space-y-4">
-          {/* おすすめカード */}
-          {recommended && (
+          {/* 休養日カード（program_plan の body_part が null の日） */}
+          {isRestDay && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+              <div className="text-xs text-zinc-500 font-medium mb-3">今日の予定</div>
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">🛌</div>
+                <div className="min-w-0">
+                  <div className="font-bold text-base">休養日</div>
+                  {todayPlan?.有酸素分 != null && todayPlan.有酸素分 > 0 && (
+                    <div className="text-xs text-cyan-400 mt-0.5">
+                      有酸素 {todayPlan.有酸素分}分
+                    </div>
+                  )}
+                </div>
+              </div>
+              {todayPlan?.メモ && (
+                <div className="text-xs text-zinc-400 mt-3 leading-relaxed">{todayPlan.メモ}</div>
+              )}
+              {/* 予定外でもブロックしない。あくまで予定を示すだけ */}
+              <button
+                onClick={onGoToTrain}
+                className="w-full mt-4 py-3 rounded-xl text-sm font-medium bg-zinc-800 text-zinc-300 active:bg-zinc-700"
+              >
+                それでもトレーニングする →
+              </button>
+            </div>
+          )}
+
+          {/* 今日の予定 / おすすめカード */}
+          {!isRestDay && featured && (
             <div className="bg-blue-950/40 border border-blue-700/40 rounded-2xl p-4">
-              <div className="text-xs text-blue-400 font-medium mb-3">今日のおすすめ</div>
+              <div className="text-xs text-blue-400 font-medium mb-3">
+                {planPart ? "今日の予定" : "今日のおすすめ"}
+              </div>
               <div className="flex items-center gap-3 mb-4">
-                <div className="text-3xl">{BODY_PART_EMOJI[recommended.名前] ?? "💪"}</div>
-                <div>
-                  <div className="font-bold text-base">{recommended.名前}</div>
-                  <div className={`text-xs mt-0.5 ${STATUS_COLOR[recommended.状態]}`}>
-                    {recommended.状態 === "未実施" ? "まだ記録なし" :
-                     recommended.状態 === "疲労中" ? `回復中（${recommended.回復目安日数}日で回復）` :
-                     recommended.状態 === "回復済み" ? `${recommended.経過日数}日前` :
-                     recommended.状態 === "そろそろ" ? `${recommended.経過日数}日前（そろそろ）` :
-                     `${recommended.経過日数}日ぶり`}
+                <div className="text-3xl">{BODY_PART_EMOJI[featured.名前] ?? "💪"}</div>
+                <div className="min-w-0">
+                  <div className="font-bold text-base">{featured.名前}</div>
+                  <div className={`text-xs mt-0.5 ${STATUS_COLOR[featured.状態]}`}>
+                    {featured.状態 === "未実施" ? "まだ記録なし" :
+                     featured.状態 === "疲労中" ? `回復中（${featured.回復目安日数}日で回復）` :
+                     featured.状態 === "回復済み" ? `${featured.経過日数}日前` :
+                     featured.状態 === "そろそろ" ? `${featured.経過日数}日前（そろそろ）` :
+                     `${featured.経過日数}日ぶり`}
                   </div>
                 </div>
               </div>
+
+              {/* 予定日でも回復が足りていなければ警告する。
+                  program_plan は予定、recovery_hours は安全装置という役割分担を保つ */}
+              {planPart && planPart.状態 === "疲労中" && (
+                <div className="mb-3 bg-amber-950/40 border border-amber-700/40 rounded-xl px-3 py-2 text-xs text-amber-300 leading-relaxed">
+                  予定日ですが、前回から{planPart.回復目安日数}日の回復目安に届いていません。無理はしないでください。
+                </div>
+              )}
+              {todayPlan?.メモ && (
+                <div className="mb-3 text-xs text-blue-200/70 leading-relaxed">{todayPlan.メモ}</div>
+              )}
+              {todayPlan?.有酸素分 != null && todayPlan.有酸素分 > 0 && (
+                <div className="mb-3 text-xs text-cyan-400">筋トレ後: 有酸素 {todayPlan.有酸素分}分</div>
+              )}
+
               <button
                 onClick={onStartTraining}
                 className="w-full py-3.5 rounded-xl text-sm font-bold bg-blue-600 active:bg-blue-700"

@@ -43,6 +43,8 @@ export type ExercisePlan = {
   ウォームアップセット数: number;
   tier: Tier;
   負荷タイプ: LoadType;
+  /** ユーザー向けの実施指示（フォーム・器具の制約・中止条件）。null なら非表示 */
+  指示: string | null;
   前回セット: PrevSet[];
 };
 
@@ -123,6 +125,19 @@ export type StatsPoint = {
 
 export type AppSettings = {
   体重kg: number;
+};
+
+/**
+ * program_plan から引いた「今日の予定」。
+ * 部位が null の日は筋トレ休養日（有酸素分 を案内する）。
+ * あくまで予定であり、実施可否の安全装置は body_parts.recovery_hours 側が持つ。
+ */
+export type TodayPlan = {
+  日付: string;
+  フェーズ: string;
+  部位: string | null;
+  有酸素分: number | null;
+  メモ: string | null;
 };
 
 export type WeeklySummary = {
