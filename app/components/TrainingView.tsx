@@ -357,13 +357,15 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
             <div key={ex.plan.id}>
               {showBonusHeading && (
                 <div className="pt-4 pb-2 border-t border-zinc-800 mt-1">
-                  <div className="text-xs font-medium text-zinc-400">ボーナス</div>
-                  <div className="text-xs text-zinc-600 mt-0.5">余力があれば。達成率には影響しません</div>
+                  <div className="text-xs font-medium text-violet-300">ボーナス</div>
+                  <div className="text-xs text-zinc-500 mt-0.5">余力があれば。達成率には影響しません</div>
                 </div>
               )}
               <div
                 className={`rounded-xl overflow-hidden ${
-                  isBonus ? "bg-zinc-900/50 border border-dashed border-zinc-700" : "bg-zinc-900"
+                  isBonus
+                    ? "bg-violet-950/30 border border-violet-800/50"
+                    : "bg-zinc-900 border border-transparent"
                 }`}
               >
                 {/* カードヘッダー（タップで展開） */}
@@ -373,14 +375,14 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className={`font-semibold ${isBonus ? "text-zinc-400" : ""}`}>{ex.plan.種目名}</span>
+                      <span className={`font-semibold ${isBonus ? "text-violet-50" : ""}`}>{ex.plan.種目名}</span>
                       {isBonus && (
-                        <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">
+                        <span className="text-xs bg-violet-900/70 text-violet-200 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">
                           任意
                         </span>
                       )}
                     </div>
-                    <div className={`text-xs mt-0.5 ${isBonus ? "text-zinc-600" : "text-zinc-400"}`}>
+                    <div className={`text-xs mt-0.5 ${isBonus ? "text-violet-300/70" : "text-zinc-400"}`}>
                       {headerSub}
                       {allSetsHaveData && (
                         <span className={`ml-2 ${achievedSets === totalSets ? "text-green-400" : achievedSets > 0 ? "text-yellow-400" : "text-red-400"}`}>
