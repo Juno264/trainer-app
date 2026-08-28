@@ -154,26 +154,28 @@ export default function TrainTab({
                   return (
                     <div key={ex.plan.id}>
                       {showBonusHeading && (
-                        <div className="pt-2 pb-1.5 mt-1 border-t border-zinc-800 text-xs text-zinc-600">
+                        <div className="pt-2 pb-1.5 mt-1 border-t border-zinc-800 text-xs text-violet-300/80">
                           ボーナス（余力があれば・達成率に影響なし）
                         </div>
                       )}
                       <div
                         className={`rounded-xl px-4 py-3 flex items-center justify-between ${
-                          isBonus ? "bg-zinc-900/50 border border-dashed border-zinc-700" : "bg-zinc-900"
+                          isBonus
+                            ? "bg-violet-950/30 border border-violet-800/50"
+                            : "bg-zinc-900 border border-transparent"
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className={`font-medium text-sm truncate ${isBonus ? "text-zinc-400" : ""}`}>
+                          <span className={`font-medium text-sm truncate ${isBonus ? "text-violet-50" : ""}`}>
                             {ex.plan.種目名}
                           </span>
                           {isBonus && (
-                            <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">
+                            <span className="text-xs bg-violet-900/70 text-violet-200 px-1.5 py-0.5 rounded-full leading-none flex-shrink-0">
                               任意
                             </span>
                           )}
                         </div>
-                        <div className={`text-xs ml-2 text-right flex-shrink-0 ${isBonus ? "text-zinc-600" : "text-zinc-500"}`}>
+                        <div className={`text-xs ml-2 text-right flex-shrink-0 ${isBonus ? "text-violet-300/70" : "text-zinc-500"}`}>
                           {formatWeight(ex.plan.目標重量kg, ex.plan.負荷タイプ)} ×{" "}
                           {ex.plan.目標レップ数}rep × {ex.plan.セット数}set
                         </div>
