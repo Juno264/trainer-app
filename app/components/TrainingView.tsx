@@ -150,6 +150,20 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
     (ex) => ex.plan.tier === "core" && !hasAnyInput(ex)
   );
 
+  // 完了確認に出す集計。記録対象は本番セットのうち入力のある行だけ
+  const recordedSets = exercises.flatMap((ex) =>
+    ex.sets.filter((s) => !s.ウォームアップ && (s.重量kg !== "" || s.レップ数 !== ""))
+  );
+  const recordedExerciseCount = exercises.filter(hasAnyInput).length;
+  const achievedSetCount = exercises.reduce(
+    (n, ex) =>
+      n +
+      ex.sets.filter(
+        (s) => !s.ウォームアップ && s.重量kg !== "" && s.レップ数 !== "" && isAchieved(s, ex.plan)
+      ).length,
+    0
+  );
+
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
@@ -195,32 +209,74 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
 
   return (
     <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
-      {/* 必須種目に未記録があるときの確認（任意種目では出さない） */}
+      {/* 完了確認。誤送信を防ぐため、記録が揃っていても必ず一段階挟む。
+          未記録があるときは「戻る」を主ボタンにして、反射的なタップで送信されないようにする */}
       {showIncompleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/70" onClick={() => setShowIncompleteConfirm(false)}>
           <div className="w-full bg-zinc-900 rounded-t-2xl px-4 pt-5 pb-safe-bottom" onClick={(e) => e.stopPropagation()}>
-            <div className="text-sm font-semibold text-zinc-300 mb-1">必須種目に未記録があります</div>
+            <div className="text-sm font-semibold text-zinc-300 mb-1">
+              {unrecordedCore.length > 0 ? "必須種目に未記録があります" : "この内容で完了しますか？"}
+            </div>
             <div className="text-xs text-zinc-500 mb-3">
-              このまま完了すると、以下は未達として達成率に反映されます
+              送信すると記録が保存され、レビューが生成されます。あとから追加で送っても、
+              同じ種目・同じセット番号は上書きされません。
             </div>
-            <div className="bg-zinc-800/60 rounded-xl px-3 py-2 mb-4 space-y-1">
-              {unrecordedCore.map((ex) => (
-                <div key={ex.plan.id} className="text-xs text-zinc-300">・{ex.plan.種目名}</div>
-              ))}
+
+            <div className="bg-zinc-800/60 rounded-xl px-3 py-2.5 mb-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-500">{bodyPart}</span>
+                <span className="text-zinc-300">
+                  {recordedExerciseCount}種目 / {recordedSets.length}セット
+                  <span className="text-zinc-500 ml-1.5">（達成{achievedSetCount}）</span>
+                </span>
+              </div>
             </div>
+
+            {unrecordedCore.length > 0 && (
+              <>
+                <div className="text-xs text-amber-400/90 mb-1.5">
+                  以下の必須種目は未記録のまま、未達として達成率に反映されます
+                </div>
+                <div className="bg-amber-950/25 border border-amber-800/40 rounded-xl px-3 py-2 mb-4 space-y-1">
+                  {unrecordedCore.map((ex) => (
+                    <div key={ex.plan.id} className="text-xs text-amber-200/90">・{ex.plan.種目名}</div>
+                  ))}
+                </div>
+              </>
+            )}
+
             <div className="space-y-2">
-              <button
-                onClick={() => { setShowIncompleteConfirm(false); handleSubmit(); }}
-                className="w-full py-3.5 rounded-xl text-sm font-semibold bg-blue-600 active:bg-blue-700"
-              >
-                このまま完了する
-              </button>
-              <button
-                onClick={() => setShowIncompleteConfirm(false)}
-                className="w-full py-3.5 rounded-xl text-sm text-zinc-400 active:bg-zinc-800"
-              >
-                戻って入力する
-              </button>
+              {unrecordedCore.length > 0 ? (
+                <>
+                  <button
+                    onClick={() => setShowIncompleteConfirm(false)}
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold bg-blue-600 active:bg-blue-700"
+                  >
+                    戻って入力する
+                  </button>
+                  <button
+                    onClick={() => { setShowIncompleteConfirm(false); handleSubmit(); }}
+                    className="w-full py-3.5 rounded-xl text-sm text-zinc-400 active:bg-zinc-800"
+                  >
+                    未記録のまま完了する
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => { setShowIncompleteConfirm(false); handleSubmit(); }}
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold bg-blue-600 active:bg-blue-700"
+                  >
+                    完了して送信する
+                  </button>
+                  <button
+                    onClick={() => setShowIncompleteConfirm(false)}
+                    className="w-full py-3.5 rounded-xl text-sm text-zinc-400 active:bg-zinc-800"
+                  >
+                    戻る
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -521,10 +577,7 @@ export default function TrainingView({ bodyPart, exercises, setExercises, condit
 
         {/* 完了ボタン */}
         <button
-          onClick={() => {
-            if (unrecordedCore.length > 0) setShowIncompleteConfirm(true);
-            else handleSubmit();
-          }}
+          onClick={() => setShowIncompleteConfirm(true)}
           disabled={submitting}
           className="w-full py-4 rounded-xl text-base font-bold bg-blue-600 active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
